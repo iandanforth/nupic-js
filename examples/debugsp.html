@@ -1,0 +1,78 @@
+
+<!DOCTYPE HTML>
+<html>
+    <head>
+	    <title>Spatial Pooler Test</title>
+	    <style>
+		    body {
+			    margin: 0;
+			    padding: 0;
+			    background-color: #000000;
+		    }
+	    </style>
+      <script src="js/simplesets.js"></script>
+	    <script src="js/seedrandom.min.js"></script>
+	    <script src="js/spatialPooler.js"></script>
+
+
+    </head>
+    <body>
+	
+	<div id="container"></div>
+	
+	<script>
+      var numColumns = 5
+	    var sp = new SpatialPooler(inputDimensions = [1024],
+                                 columnDimensions = [10],
+                                 potentialRadius = 1024,
+                                 potentialPct = 1,
+                                 globalInhibition = true,
+                                 localAreaDensity = -1.0,
+                                 numActiveColumnsPerInhArea = 3,
+                                 stimulusThreshold = 0,
+                                 synPermInactiveDec = 0.0001,
+                                 synPermActiveInc = 0.1,
+                                 synPermConnected = 0.10,
+                                 minPctOverlapDutyCycle = 0.001,
+                                 minPctActiveDutyCycle = 0.1,
+                                 dutyCyclePeriod = 1000,
+                                 maxBoost = 10.0,
+                                 seed = -1,
+                                 spVerbosity = 0,
+                                 addNoise = false);
+      
+      console.log("Num inputs: ");
+      console.log(sp._numInputs);
+      console.log("Num columns: ");
+      console.log(sp._numColumns);
+
+      input = [];
+      for (var i = 0; i < sp._numInputs; i++) {
+          var val = Math.random();
+          input.push(val);
+      }
+      
+      //console.log(input.length);
+      
+      activeArray = [];
+      for (var i = 0; i < numColumns; i++) {
+        activeArray.push(0);
+      }
+      
+      for (var i = 0; i < sp._numInputs; i++) {
+          console.log(sp._permanences[0][i]);
+      }
+      
+      sp.compute(input, learn = true, activeArray);
+      console.log("Active array after input1:")
+      console.log(activeArray);
+      
+
+      
+
+
+	    
+	</script>
+	
+	</body>
+</html>

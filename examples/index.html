@@ -1,0 +1,232 @@
+
+<!DOCTYPE HTML>
+<html>
+<head>
+	<title>pixi.js example 1</title>
+	<style>
+		body {
+			margin: 0;
+			padding: 0;
+			background-color: #000000;
+		}
+	</style>
+	<script src="js/pixi.dev.js"></script>
+  <script src="js/Stats.js"></script>
+  <script src="js/simplesets.js"></script>
+  <script src="js/seedrandom.min.js"></script>
+  <script src="js/spatialPooler.js"></script>
+
+</head>
+<body>
+    
+	<div id="container"></div>
+  <canvas id="myCanvas" width="128" height="128"></canvas>
+
+	<script>
+  
+  // Update PIXI to get canvas features
+  // http://www.html5gamedevs.com/topic/518-hack-making-all-2d-drawing-functions-available-to-pixi/
+  PIXI.Texture.Draw = function (cb) {
+            var canvas = document.createElement('canvas');
+            if (typeof cb == 'function') cb(canvas);
+            return PIXI.Texture.fromCanvas(canvas);
+  }
+
+	// Common global variables
+	var stats;
+	
+	// DOM
+	var container = document.getElementById( 'container' );
+
+	// create an new instance of a pixi stage
+	var stage = new PIXI.Stage(0XFFFFFF);
+
+	// create a renderer instance
+	var renderer = new PIXI.WebGLRenderer(window.innerWidth, window.innerHeight);
+	
+	// Update if the browser window is resized
+	window.addEventListener( 'resize', onWindowResize, false );
+	
+	function onWindowResize() {
+
+	    renderer.resize( window.innerWidth, window.innerHeight );
+
+	}
+
+	// add the renderer view element to the DOM
+	container.appendChild(renderer.view);
+
+	// STATS
+	stats = new Stats();
+	stats.domElement.style.position = 'absolute';
+	stats.domElement.style.bottom = '0px';
+	stats.domElement.style.zIndex = 100;
+	container.appendChild( stats.domElement );
+	
+	requestAnimFrame( animate );
+  
+  counter = 0;
+	
+  var sprite = new PIXI.Sprite(PIXI.Texture.Draw(function (canvas) {
+      // We are now in a 2D context 
+      canvas.width = 128;   
+      canvas.height = 128;
+      
+      // Get canvas 2D context
+      var context = canvas.getContext('2d');  
+      
+      // Create a new image.
+      var img = new Image();
+    
+      // Once it's loaded draw the image on canvas and invert the colors.
+      img.addEventListener('load', function () {
+        
+        var x = 0, y = 0;
+    
+        // Draw the image on canvas.
+        context.drawImage(this, x, y);
+        
+        imageSections = []
+        for (var i = 0; i < 4 * 32; i += 32) {
+            for (var j = 0; j < 4 * 32; j += 32) {
+              // Get the pixels.
+              var imgd = context.getImageData(j, i, 32, 32);
+              var pix = imgd.data;
+              var redArray = [];
+              for (var k = 0; k < pix.length; k += 4) {
+                  if (pix[k] > 100) {
+                    redArray.push(0);
+                  } else {
+                    redArray.push((255 - pix[k]) / 255); // red
+                  }
+              }
+              imageSections.push(redArray);
+            }
+        }
+    
+        // Draw the ImageData object.
+        context.putImageData(imgd, 0, 0);
+      }, false);
+    
+      img.src = 'images/Image2.jpg';
+  }));
+
+  sprite.scale.x = 2;
+  sprite.scale.y = 2;
+  sprite.position.y = 100;
+  
+	stage.addChild(sprite);
+  
+  var graphics = new PIXI.Graphics();
+  // draw a rectangel
+  graphics.lineStyle(2, 0x0000FF, 1);
+  graphics.drawRect(0, 0, 64, 64);
+  squareT = graphics.generateTexture();
+  square = new PIXI.Sprite(squareT);
+  square.position.x = -10;
+  square.position.y = 90;
+
+  stage.addChild(square);
+  
+  numColumns = 32;
+  sp = new SpatialPooler(inputDimensions = [1024],
+                          columnDimensions = [numColumns],
+                          potentialRadius = 1024,
+                          potentialPct = 1,
+                          globalInhibition = true,
+                          localAreaDensity = -1.0,
+                          numActiveColumnsPerInhArea = 3,
+                          stimulusThreshold = 0,
+                          synPermInactiveDec = 0.005,
+                          synPermActiveInc = 0.015,
+                          synPermConnected = 0.60,
+                          minPctOverlapDutyCycle = 0.001,
+                          minPctActiveDutyCycle = 0.1,
+                          dutyCyclePeriod = 1000,
+                          maxBoost = 10.0,
+                          seed = -1,
+                          spVerbosity = 0,
+                          addNoise = false);
+      
+
+  activeArray = [];
+  for (var i = 0; i < sp._numColumns; i++) {
+    activeArray.push(0);
+  }
+
+	function animate() {
+
+	    requestAnimFrame( animate );
+
+      // Run sp
+      
+
+      
+      var input = imageSections[counter % 16];
+      sp.compute(input, learn = true, activeArray);
+      if (counter < 400) {
+          //console.log("Active array after input:")
+          //console.log(activeArray);
+          
+          for (var i = stage.children.length - 1; i >=2; i--) {
+              stage.removeChild(stage.children[i]);
+          };
+          
+          var row = (counter % 4)
+          var col = Math.floor((counter % 16) / 4);
+          square.position.x = (row * 64) - 10;
+          square.position.y = (col* 64) + 90;
+          
+          var permBoxesPerDisplayCol = 8;
+          
+          for (var i = 0; i < numColumns; i++) {
+              var sprite = new PIXI.Sprite(PIXI.Texture.Draw(function (canvas) {
+                //we are now in a 2D context
+                //you need to specify your canvas width and height otherwise
+                //it'll have a size of 0x0 and you'll get an empty sprite
+                canvas.width = 32;   
+                canvas.height = 32;
+            
+                var ctx = canvas.getContext('2d');  //get  canvas 2D context
+                
+                ctx.fillStyle = "black";
+                ctx.fillRect(0,0,canvas.width,canvas.height);
+                
+                var pix = ctx.createImageData(canvas.width, canvas.height);
+                for (var y = 0; y < pix.data.length; y+=4) {
+                    var val = sp._permanences[i][y/4]
+                    pix.data[y] = 255   - val * 255;
+                    pix.data[y+1] = 255 - val * 255;
+                    pix.data[y+2] = 255 - val * 255;
+                    pix.data[y+3] = 255;
+                };
+             
+                ctx.putImageData(pix, 0, 0);		
+              }));
+              
+              sprite.scale.x = 1.5;
+              sprite.scale.y = 1.5;
+              sprite.position.x = 400 + Math.floor(i / permBoxesPerDisplayCol) * 64;
+              sprite.position.y = 0 + (32 * 1.5) * (i % permBoxesPerDisplayCol);
+              
+              stage.addChild(sprite);
+          }
+          
+          
+      }
+
+      
+      counter++;
+
+      
+	    // Update our stats counter
+	    stats.update();
+	    
+	    // render the stage
+	    renderer.render(stage);
+	}
+
+	</script>
+
+	</body>
+</html>

@@ -39,7 +39,16 @@ function arrayProduct(arr) {
         prod *= arr[i];
     };
     return prod;
-}
+};
+
+function arrayCumProduct(arr) {
+    // Returns the cumulative product of the values in an array
+    var result = [];
+    for (var i = 0; i < arr.length; i += 1) {
+        result.push(arrayProduct(arr.slice(0, i + 1)));
+    };
+    return result;
+};
 
 function defaultFor(arg, val) {
     return typeof arg !== 'undefined' ? arg : val;
@@ -309,6 +318,9 @@ var SpatialPooler = function( inputDimensions,
     this._version = 1.0;
     this._iterationNum = 0;
     this._iterationLearnNum = 0;
+    
+    // Build an array that helps us map 1D input indices back to ND originals
+    this._dimComponentCounts = this._calcDimensionComponentCounts()
 
     // Store the set of all inputs that are within each column's potential pool.
     // 'potentialPools' is a matrix, whose rows represent cortical columns, and 
@@ -433,7 +445,6 @@ SpatialPooler.prototype.compute = function(inputVector, learn, activeArray){
                     everywhere else.
     */
 
-    
     this._updateBookeepingVars(learn);
     // Convert to 1D array
     var oneDInputVector = nDto1D(inputVector, this._inputDimensions.length);
@@ -610,7 +621,7 @@ SpatialPooler.prototype._avgConnectedSpanForColumn2D = function(){
         console.log("Not implemented.")
 };
     
-SpatialPooler.prototype._avgConnectedSpanForColumnND = function(){
+SpatialPooler.prototype._avgConnectedSpanForColumnND = function(index){
     /*
     The range of connectedSynapses per column, averaged for each dimension. 
     This value is used to calculate the inhibition radius. This variation of 
@@ -621,22 +632,73 @@ SpatialPooler.prototype._avgConnectedSpanForColumnND = function(){
     index:          The index identifying a column in the permanence, potential 
                     and connectivity matrices.
     */
-    var dimensions = this._columnDimensions;
-    // [1]
-    // [4, 4]
-    // [12, 12, 12]
-    // Reverse the dimensions
-    // Get all but the last one
-    // Append that to the array [1]
-    // Calculate an array of cumulative products for that array
-    // Reverse that resulting array
-    // TODO implement this properly
     
+    // To Coords
+    // Divide index by each element in bounds (floor that), return that array
+    // This array should be the same length as dimensions
+    // Take each of those values and translate it back into proper dimensions
+    // by taking each value and moding the dim into it
+    
+    var connected = [];
+    var conSynArray = this._connectedSynapses[index];
+    for (var i = 0; i < conSynArray.length; i++) {
+        if (conSynArray[i] > 0) {
+            connected.push(conSynArray[i]);
+        };
+    };
+    if (connected.length == 0) {
+        return 0;
+    };
+    
+    for (var i = 0; i < connected.length; i++) {
+        
+    }
     return .7 * this._numInputs; // BS FOR NOW
     
     
 };
+
+SpatialPooler.prototype._calcDimensionComponentCounts = function() {
+    /*
+    Returns a list of the counts of elements in each dimension of the input.
+    For example a 3 x 3 x 3 input would have 9 elements per plane, 3 elements
+    per column, and 1 element per row in that column. So this method
+    would return the array [9, 3, 1]. This is used as part of calculating
+    overlap and inhibition radii.
     
+    NOTE: This is a divergence from the cpp/py implementations which call
+    this "bounds."
+    */
+    var dimensions = this._columnDimensions;
+    // Reverse the dimensions
+    var reversedDims = dimensions.reverse();
+    // Get all but the last one
+    var truncatedDims = reversedDims.slice(0,-1);
+    // Append that to the array [1]
+    var extendedDims = [1].concat(truncatedDims);
+    // Calculate an array of cumulative products for that array
+    var cumProduct = arrayCumProduct(extendedDims);
+    // Reverse that resulting array.
+    var dimComponentCounts = cumProduct.reverse();
+    
+    return dimComponentCounts;
+};
+
+
+SpatialPooler.prototype._indexToCoords = function(inputIndex) {
+    /*
+    Returns an array of length this._inputDimensions corresponding to the
+    coordinate in input space for the given inputIndex in 1D space
+    */
+    coords = [];
+    for (var i = 0; i < this._inputDimensions.length; i++) {
+        var coord = (inputIndex / this._dimComponentCounts[i]) %
+                                                    this._inputDimensions[i];
+        coords.push(val);
+    };
+    return coords;
+};
+
 SpatialPooler.prototype._adaptSynapses = function(inputVector, activeColumns){
     /*
     The primary method in charge of learning. Adapts the permanence values of 
@@ -1124,7 +1186,7 @@ SpatialPooler.prototype._inhibitColumnsGlobal = function(overlaps, density){
     /*
     Perform global inhibition. Performing global inhibition entails picking the 
     top 'numActive' columns with the highest overlap score in the entire 
-    region. At most half of the columns are allowed to be active.
+    region. At most, density percent of the columns are allowed to be active.
 
     Parameters:
     ----------------------------
@@ -1136,7 +1198,6 @@ SpatialPooler.prototype._inhibitColumnsGlobal = function(overlaps, density){
     */
     
     // Calculate num active total
-
     var numActive = Math.round(density * this._numColumns);
     var activeColumns = [];
     for (var i = 0; i < this._numColumns; i++) {
@@ -1168,8 +1229,36 @@ SpatialPooler.prototype._inhibitColumnsGlobal = function(overlaps, density){
     return winningIndices
 };
     
-SpatialPooler.prototype._inhibitColumnsLocal = function(){
-    console.log("Not implemented.");
+SpatialPooler.prototype._inhibitColumnsLocal = function(overlaps, density){
+    /*
+    Performs local inhibition. Local inhibition is performed on a column by 
+    column basis. Each column observes the overlaps of its neighbors and is 
+    selected if its overlap score is within the top 'numActive' in its local 
+    neighborhood. At most, density percent of the columns in a local
+    neighborhood are allowed to be active.
+
+    Parameters:
+    ----------------------------
+    overlaps:       An array containing the overlap score for each column. 
+                    The overlap score for a column is defined as the number 
+                    of synapses in a "connected state" (connected synapses) 
+                    that are connected to input bits which are turned on.
+    density:        The fraction of columns to survive inhibition. This
+                    value is only an intended target. Since the surviving
+                    columns are picked in a local fashion, the exact fraction 
+                    of survining columns is likely to vary.
+    */
+    
+    // Create a holding array for the active column indices
+    var activeColumns = [];
+    // Calculate a small value to add to the winning column overlap scores
+    var addToWinners = Math.max.apply(null, overlaps) / 1000.0;
+    // Loop over each column
+    for (var i = 0; i < this._numColumns; i++) {
+        var maskNeighbors = this._getNeighbors2D( i,
+                                                 this._columnDimensions,
+                                                 this._inhibitionRadius);
+    };
 };
     
 SpatialPooler.prototype._getNeighbors1D = function(){
@@ -1180,8 +1269,39 @@ SpatialPooler.prototype._getNeighbors2D = function(){
     console.log("Not implemented.");
 };
     
-SpatialPooler.prototype._getNeighborsND = function(){
-    console.log("Not implemented.");
+SpatialPooler.prototype._getNeighborsND = function(columnIndex,
+                                                   dimensions,
+                                                   radius,
+                                                   wrapAround){
+    /*
+    Similar to _getNeighbors1D and _getNeighbors2D, this function Returns a 
+    list of indices corresponding to the neighbors of a given column. Since the 
+    permanence values are stored in such a way that information about toplogy 
+    is lost. This method allows for reconstructing the toplogy of the inputs, 
+    which are flattened to one array. Given a column's index, its neighbors are 
+    defined as those columns that are 'radius' indices away from it in each 
+    dimension. The method returns a list of the flat indices of these columns. 
+    Parameters:
+    ----------------------------
+    columnIndex:    The index identifying a column in the permanence, potential 
+                    and connectivity matrices.
+    dimensions:     An array containg a dimensions for the column space. A 2x3
+                    grid will be represented by [2,3].
+    radius:         Indicates how far away from a given column are other 
+                    columns to be considered its neighbors. In the previous 2x3
+                    example, each column with coordinates:
+                    [2+/-radius, 3+/-radius] is considered a neighbor.
+    wrapAround:     A boolean value indicating whether to consider columns at 
+                    the border of a dimensions to be adjacent to columns at the 
+                    other end of the dimension. For example, if the columns are
+                    layed out in one deimnsion, columns 1 and 10 will be 
+                    considered adjacent if wrapAround is set to true:
+                    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    */
+    
+    wrapAround = defaultFor(wrapAround, false);
+    console.assert(dimensions.length > 0);
+    
 };
     
 SpatialPooler.prototype._isUpdateRound = function(){
