@@ -4,5 +4,3 @@ node_js:
   
 before_script:
   - npm install -g gulp
-
-script: grunt test --verbose --force
