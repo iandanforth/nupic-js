@@ -1,0 +1,29 @@
+{
+  "name": "nupic-js",
+  "version": "0.0.1",
+  "description": "JavaScript port of NuPIC",
+  "license": "GPL-3.0",
+  "repository": "iandanforth/nupic-js",
+  "bugs": { "url" : "http://github.com/iandanforth/nupic-js/issues"
+  },
+  "author": {
+    "name": "Ian Danforth",
+    "email": "iandanforth@gmail.com"
+  },
+  "engines": {
+    "node": ">=0.10.0"
+  },
+  "scripts": {
+    "test": "gulp"
+  },
+  "keywords": [
+    "numenta",
+    "nupic",
+    "machine learning"
+  ],
+  "devDependencies": {
+    "gulp-qunit": "~0.2.1",
+    "gulp-util": "~2.2.14",
+    "gulp": "~3.5.1"
+  }
+}
