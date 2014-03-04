@@ -1,5 +1,6 @@
 nupic-js
 ========
+[![Build Status](https://travis-ci.org/iandanforth/nupic-js.png?branch=master)](https://travis-ci.org/iandanforth/nupic-js)
 
 A port of NuPIC to JavaScript
 
