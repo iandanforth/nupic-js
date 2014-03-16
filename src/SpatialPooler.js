@@ -85,24 +85,39 @@ function nDto1D(mat, dimCount) {
 }
 
 function Comparator( a, b ) {
+    // Sorts an array by its second element. The first element must be
+    // the original element index to provide stable sorting.
     
-    if (a[1] < b[1]) {
-        return -1;
-    } else if (a[1] > b[1]) {
-        return 1;
-    };
-    return 0;
+    if (a[1] == b[1]) {
+        return a[0] - b[0];
+    }
+    
+    return a[1] - b[1];
 };
 
 function ComparatorReversed( a, b ) {
+    // Reverse sorts an array by its second element. The first element must be
+    // the original element index to provide stable sorting.
+    if (a[1] == b[1]) {
+        return a[0] - b[0];
+    }
     
-    if (a[1] > b[1]) {
-        return -1;
-    } else if (a[1] < b[1]) {
-        return 1;
-    };
-    return 0;
+    return b[1] - a[1];
 };
+
+
+function cartesianProductOf() {
+    // From http://cwestblog.com/2011/05/02/cartesian-product-of-multiple-arrays/
+    return Array.prototype.reduce.call(arguments, function(a, b) {
+        var ret = [];
+        a.forEach(function(a) {
+            b.forEach(function(b) {
+                ret.push(a.concat([b]));
+            });
+        });
+        return ret;
+    }, [[]]);
+}
 
 /*********************************/
 
@@ -123,7 +138,9 @@ var SpatialPooler = function( inputDimensions,
 			      maxBoost,
 			      seed,
 			      spVerbosity,
-			      addNoise ) {
+			      addNoise,
+                  wrapPotentialPools,
+                  initConnectedPct) {
     /*************************************************************
     Parameters:
     ----------------------------
@@ -260,6 +277,14 @@ var SpatialPooler = function( inputDimensions,
     addNoise:             If we should add noise to column activiations to break
                           ties. With this on you can never have *no* activity
                           which may or may not be desirable.
+    wrapPotentialPools:   Determines if a column's connections can wrap around
+                          to the other side of the input vector. This would be
+                          unrealistic in terms of a topology, but is useful for
+                          problems without topology.
+    initConnectedPct:     The percentage of synapses in a column's potentialPool
+                          which will start off with permanences above
+                          synPermConnected, i.e. be connected.
+                          
     *******************************************************************/
     
     var parent = this
@@ -294,14 +319,15 @@ var SpatialPooler = function( inputDimensions,
     this._dutyCyclePeriod = defaultFor(dutyCyclePeriod, 1000);
     this._maxBoost = defaultFor(maxBoost, 10.0);
     this._spVerbosity = defaultFor(spVerbosity, 0);
+    // NOTE: The below parameters are divergences from the py/cpp impl.
+    this._addNoise = defaultFor(addNoise, true);    
+    this._wrapPotentialPools = defaultFor(wrapPotentialPools, true);
+    this._initConnectedPct = defaultFor(initConnectedPct, 0.5);
     
     // More input checking
     console.assert((this._numActiveColumnsPerInhArea > 0 ||
                     (this._localAreaDensity > 0 &&
                      this._localAreaDensity <= .5)));
-    
-    // Should noise be added to column activation scores to break ties?
-    this._addNoise = defaultFor(addNoise, true);
 
     // Extra parameter settings
     this._synPermMin = 0.0;
@@ -310,17 +336,21 @@ var SpatialPooler = function( inputDimensions,
     console.assert(this._synPermTrimThreshold < this._synPermConnected,
 		   "Bad paramaters passed. synPermTrimThreshold must be less " +
 		   "than half of synPermConnected" );
-    this._updatePeriod = 1;
-    
-    initConnectedPct = 1;
+    this._updatePeriod = 50;
 
     // Internal state
     this._version = 1.0;
     this._iterationNum = 0;
     this._iterationLearnNum = 0;
     
+    // Input Dimensions Component Counts
     // Build an array that helps us map 1D input indices back to ND originals
-    this._dimComponentCounts = this._calcDimensionComponentCounts()
+    this._inputDimCompCounts = this._calcDimensionComponentCounts(
+                                                        this._inputDimensions);
+    this._columnDimCompCounts = this._calcDimensionComponentCounts(
+                                                        this._columnDimensions);
+    //console.log("Dimension counts: ");
+    //console.log(this._columnDimCompCounts);
 
     // Store the set of all inputs that are within each column's potential pool.
     // 'potentialPools' is a matrix, whose rows represent cortical columns, and 
@@ -342,20 +372,14 @@ var SpatialPooler = function( inputDimensions,
     // 'this._potentialPools', the permances are stored in a matrix whose rows
     // represent the cortial columns, and whose columns represent the input 
     // bits. if this._permanences[i][j] = 0.2, then the synapse connecting 
-    // cortical column 'i' to input bit 'j'  has a permanence of 0.2. Here we 
-    // also use the SparseMatrix class to reduce the memory footprint and 
-    // computation time of algorithms that require iterating over the data 
-    // structure. This permanence matrix is only allowed to have non-zero 
-    // elements where the potential pool is non-zero.
+    // cortical column 'i' to input bit 'j'  has a permanence of 0.2.
     
     this._permanences = [];
 
-    // 'this._connectedSynapses' is a similar matrix to 'this._permanences' 
-    // (rows represent cortial columns, columns represent input bits) whose 
-    // entries represent whether the cortial column is connected to the input 
-    // bit, i.e. its permanence value is greater than 'synPermConnected'. While 
-    // this information is readily available from the 'this._permanence' matrix, 
-    // it is stored separately for efficiency purposes.
+    // NOTE: This is a divergence. In cpp/py this would be a binary array where
+    // each connected index is 1. Here instead we are storing the indices only.
+    // While this information is readily available from the 'this._permanence'
+    // matrix, it is stored separately for efficiency purposes.
     
     this._connectedSynapses = [];
     for (var i = 0; i < this._numColumns; i++) {
@@ -363,9 +387,9 @@ var SpatialPooler = function( inputDimensions,
     }
 
     // Stores the number of connected synapses for each column. This is simply
-    // a sum of each row of 'this._connectedSynapses'. again, while this 
-    // information is readily available from 'this._connectedSynapses', it is
-    // stored separately for efficiency purposes.
+    // a count of 'this._connectedSynapses'. Again, while this information is
+    // readily available from 'this._connectedSynapses', it is stored separately
+    // for efficiency purposes.
     
     this._connectedCounts = [];
     for (var i = 0; i < this._numColumns; i++); {
@@ -377,19 +401,14 @@ var SpatialPooler = function( inputDimensions,
     // activated.
     
     for (var i = 0; i < this._numColumns; i++) {
-      var potential = parent._mapPotential( i, wrapAround = true );
+      var potential = parent._mapPotential( i, this._wrapPotentialPools );
+      //console.log("Potential pool");
+      //console.log(potential);
       this._potentialPools.push(potential);
-      perm = this._initPermanence(potential, initConnectedPct)
-      if (i == 0) {
-        //console.log("In init ...");
-        //console.log("Potential:");
-        //console.log(potential);
-        //console.log(potential.length);
-        //console.log("Perms:");
-        //console.log(perm);
-        //console.log(perm.length);
-      }
-      this._updatePermanencesForColumn(perm, i, raisePerm = true) 
+      perm = this._initPermanence(potential, this._initConnectedPct);
+      //console.log("Initial perms");
+      //console.log(perm);
+      this._updatePermanencesForColumn(perm, i, raisePerm = true);
     };
 
     this._overlapDutyCycles = [];
@@ -449,6 +468,9 @@ SpatialPooler.prototype.compute = function(inputVector, learn, activeArray){
     // Convert to 1D array
     var oneDInputVector = nDto1D(inputVector, this._inputDimensions.length);
     
+    //console.log("1D version of input: ");
+    //console.log(oneDInputVector);
+    
     // Make sure our input is as defined during init
     console.assert(oneDInputVector.length == this._numInputs,
                    "Input does not match specified input dimensions");
@@ -487,16 +509,31 @@ SpatialPooler.prototype.compute = function(inputVector, learn, activeArray){
     //console.log(activeColumns);
     if ( learn === true) {
         this._adaptSynapses(oneDInputVector, activeColumns);
-        //this._updateDutyCycles(overlaps, activeColumns);
+        this._updateDutyCycles(overlaps, activeColumns);
+        // NOTE: This is a divergence. We do not bump up weak columns.
+        //
+        // Arbitrarily increasing the perms for columns that haven't been
+        // active is bizzare and un-biological. In the case where a column
+        // has a potential pool drawn from the entire input this *sort of*
+        // looks like the neuron growing new dendrites into more active
+        // areas, but with topology this makes little sense.
+        
         //this._bumpUpWeakColumns();
-        //this._updateBoostFactors();
-        //if ( this._isUpdateRound() ) {
-        //    this._updateInhibitionRadius()
-        //    this._updateMinDutyCycles()
-        //};
+        
+        this._updateBoostFactors();
+        if ( this._isUpdateRound() ) {
+            this._updateInhibitionRadius()
+            // Note: This is a divergence. We do not bother with min duty cycles
+            // as they are used in bumpUpWeakColumns and the original non-local
+            // implementation of boosting, which is not used here.
+            //this._updateMinDutyCycles()
+        };
     } else {
         activeColumns = this._stripNeverLearned(activeColumns);
     };
+    
+    //console.log("Active Columns after adaptSynapses");
+    //console.log(activeColumns);
     
     // Clear out the active array so we can refill it
     for (var i = 0; i < activeArray.length; i++) {
@@ -504,13 +541,22 @@ SpatialPooler.prototype.compute = function(inputVector, learn, activeArray){
     };
     // Set new values
     for (var i = 0; i < activeColumns.length; i++) {
-        activeArray[activeColumns[i]] = 1;
+        activeArray[activeColumns[i]] = this.boostedOverlaps[i];
     }
+    //console.log("Active array");
+    //console.log(activeArray);
 };
 
 
-SpatialPooler.prototype._stripNeverLearned = function(){
-        console.log("Not implemented.")
+SpatialPooler.prototype._stripNeverLearned = function(activeColumns){
+    var learned = [];
+    for (var i = 0; i < activeColumns.length; i++) {
+        // If an active column has zero duty cycle, omit it.
+        if (this._activeDutyCycles[activeColumns[i]] > 0) {
+            learned.push(activeColumns[i]);
+        }
+    }
+    return learned
 };
 
     
@@ -524,10 +570,13 @@ SpatialPooler.prototype._updateMinDutyCyclesGlobal = function(){
     
 SpatialPooler.prototype._updateDutyCycles = function(overlaps, activeColumns){
     /*
-    Updates the duty cycles for each column. The OVERLAP duty cycle is a moving
-    average of the number of inputs which overlapped with the each column. The
-    ACTIVITY duty cycles is a moving average of the frequency of activation for 
-    each column.
+    Updates the duty cycles for each column.
+    
+    The OVERLAP duty cycle is a moving average of the number of inputs which
+    overlapped with each column. (The overlap score)
+    
+    The ACTIVITY duty cycle is a moving average of the frequency of activation
+    for each column.
 
     Parameters:
     ----------------------------
@@ -536,36 +585,62 @@ SpatialPooler.prototype._updateDutyCycles = function(overlaps, activeColumns){
                     the sprase set of columns which survived inhibition.
     */
     
-    overlapArray = [];
+    // Create a couple of holding arrays
+    var overlapArray = [];
     var activeArray = [];
     for (var i = 0; i < this._numColumns; i++) {
         overlapArray.push(0.0);
         activeArray.push(0.0);
     };
-    //overlapArray[overlaps > 0] = 1
-    //if activeColumns.size > 0:
-    //  activeArray[activeColumns] = 1
-    //
-    //period = self._dutyCyclePeriod
-    //if (period > self._iterationNum):
-    //  period = self._iterationNum
-    //
-    //self._overlapDutyCycles = self._updateDutyCyclesHelper(
-    //                            self._overlapDutyCycles, 
-    //                            overlapArray, 
-    //                            period
-    //                          )
-    //
-    //self._activeDutyCycles = self._updateDutyCyclesHelper(
-    //                            self._activeDutyCycles, 
-    //                            activeArray,
-    //                            period
-    //                          )
+    
+    //console.log("Overlaps in update duty cycles");
+    //console.log(overlaps);
+    
+    // If a column overlapped anything set its corresponding index to 1
+    for (var i = 0; i < overlaps.length; i++) {
+        if (overlaps[i] > 0) {
+            overlapArray[i] = 1;
+        };
+    };
+    
+    if (activeColumns.length > 0) {
+        //console.log("Active columns in update duty cycles");
+        //console.log(activeColumns);
+        for (var i = 0; i < activeColumns.length; i++) {
+            activeArray[activeColumns[i]] = 1;
+        };
+    };
+    
+    //console.log("Active array in update duty cycles");
+    //console.log(activeArray);
+    
+    var period = this._dutyCyclePeriod;
+    //console.log(period);
+    if (period > this._iterationNum){
+        period = this._iterationNum;
+    }
+    
+    this._overlapDutyCycles = this._updateDutyCyclesHelper(
+                                                        this._overlapDutyCycles,
+                                                        overlapArray, 
+                                                        period);
+    
+    //console.log("Overlap Duty Cycles in _updateDutyCycles");
+    //console.log(this._overlapDutyCycles);
+    
+    this._activeDutyCycles = this._updateDutyCyclesHelper(
+                                                        this._activeDutyCycles,
+                                                        activeArray,
+                                                        period
+                                                      );
+    
+    //console.log("Active Duty Cycles in _updateDutyCycles");
+    //console.log(this._activeDutyCycles);
 };
     
 SpatialPooler.prototype._updateInhibitionRadius = function(){
     /*
-    Update the inhibition radius. The inhibition radius is a meausre of the
+    Update the inhibition radius. The inhibition radius is a measure of the
     square (or hypersquare) of columns that each a column is "conencted to"
     on average. Since columns are are not connected to each other directly, we 
     determine this quantity by first figuring out how many *inputs* a column is 
@@ -579,21 +654,26 @@ SpatialPooler.prototype._updateInhibitionRadius = function(){
         this._inhibitionRadius = Math.max.apply(null, this._columnDimensions);
         return;
     } else {
-      // NOTE: This pathway is not fully implemented!!! Values cannot be
-      // trusted!!
       var avgConnectedSpansForColumns = [];
       for (var i = 0; i < this._numColumns; i++) {
         avgConnectedSpansForColumns.push(this._avgConnectedSpanForColumnND(i));
       };
       var avgConnectedSpan = arrayMean(avgConnectedSpansForColumns);
+      //console.log("Average Connected Span");
+      //console.log(avgConnectedSpan);
       var columnsPerInput = this._avgColumnsPerInput();
+      //console.log("Columns per input:");
+      //console.log(columnsPerInput);
       var diameter = avgConnectedSpan * columnsPerInput;
+      //console.log("Diameter: ");
       //console.log(diameter);
       var radius = (diameter - 1) / 2.0;
+      //console.log("Radius: ")
       //console.log(radius);
       var radius = Math.max(1.0, radius);
       //console.log(radius);
       this._inhibitionRadius = Math.round(radius);
+      //console.log("INHIBITION RADIUS")
       //console.log(this._inhibitionRadius);
     }
 };
@@ -608,9 +688,46 @@ SpatialPooler.prototype._avgColumnsPerInput = function(){
     */
     //TODO: extend to support different number of dimensions for inputs and 
     // columns
-    // TODO: implement this properly
     
-    return this._numColumns / this._numInputs;
+    // Does our input or column space have more dimensions?
+    var numDim = Math.max(this._columnDimensions.length,
+                          this._inputDimensions.length);
+    
+    // Create two arrays of length numDim
+    
+    // Set up an array of ones
+    var colDim = [];
+    for (var i = 0; i < numDim; i++) {
+        colDim.push(1);
+    };
+    for (var i = 0; i < this._columnDimensions.length; i++) {
+        colDim[i] = this._columnDimensions[i];
+    }
+    
+    // Set up another array of ones
+    var inputDim = [];
+    for (var i = 0; i < numDim; i++) {
+        inputDim.push(1);
+    };
+    
+    for (var i = 0; i < this._inputDimensions.length; i++) {
+        inputDim[i] = this._inputDimensions[i];
+    };
+
+    //console.log(numDim);
+    //console.log(colDim);
+    //console.log(inputDim);
+    
+    var columnsPerInput = [];
+    for (var i = 0; i < colDim.length; i++) {
+        columnsPerInput.push(colDim[i] / inputDim[i]);
+    }
+    
+    var avgColsPerInput = arrayMean(columnsPerInput);
+    //console.log("Average Cols Per Input");
+    //console.log(avgColsPerInput);
+    
+    return avgColsPerInput;
 };
     
 SpatialPooler.prototype._avgConnectedSpanForColumn1D = function(){
@@ -626,6 +743,10 @@ SpatialPooler.prototype._avgConnectedSpanForColumnND = function(index){
     The range of connectedSynapses per column, averaged for each dimension. 
     This value is used to calculate the inhibition radius. This variation of 
     the function supports arbitrary column dimensions.
+    
+    NOTE: This is a divergence from the cpp/py implementation. Here we
+    use pre-calculated dimension component counts (a.k.a. "bounds"). Back
+    porting this is https://github.com/numenta/nupic/issues/699
 
     Parameters:
     ----------------------------
@@ -633,70 +754,113 @@ SpatialPooler.prototype._avgConnectedSpanForColumnND = function(index){
                     and connectivity matrices.
     */
     
-    // To Coords
-    // Divide index by each element in bounds (floor that), return that array
-    // This array should be the same length as dimensions
-    // Take each of those values and translate it back into proper dimensions
-    // by taking each value and moding the dim into it
-    
-    var connected = [];
-    var conSynArray = this._connectedSynapses[index];
-    for (var i = 0; i < conSynArray.length; i++) {
-        if (conSynArray[i] > 0) {
-            connected.push(conSynArray[i]);
-        };
-    };
+    //console.log("Dimension components avgConnectedSpan")
+    //console.log(this._inputDimCompCounts);
+    var connected = this._connectedSynapses[index];
     if (connected.length == 0) {
         return 0;
     };
+    //console.log("Connected synapses for this column: (avgConnectedSpan)");
+    //console.log(connected)
+
+    // Initially set max and min coords below and above the range of possible
+    // coords in the input.
+    maxCoord = [];
+    minCoord = [];
+    for (var i = 0; i < this._inputDimensions.length; i++) {
+        maxCoord.push(-1);
+        minCoord.push(Math.max.apply(null, this._inputDimensions));
+    };
     
+    //console.log("MAX COORD and MIN COORD");
+    //console.log(maxCoord);
+    //console.log(minCoord);
+    
+    // Find the max and min coords of connected synapses
     for (var i = 0; i < connected.length; i++) {
-        
+        var ind = connected[i];
+        var coords = this._indexToCoords(ind,
+                                         this._inputDimensions,
+                                         this._inputDimCompCounts);
+        //console.log("Index and reconstructed coordinates: ")
+        //console.log(ind);
+        //console.log(coords);
+        for (var j = 0; j < this._inputDimensions.length; j++) {
+            maxCoord[j] = Math.max(coords[j], maxCoord[j]);
+            minCoord[j] = Math.min(coords[j], minCoord[j]);
+        };
     }
-    return .7 * this._numInputs; // BS FOR NOW
+
+    //console.log("MAX COORD and MIN COORD after iterations");
+    //console.log(maxCoord);
+    //console.log(minCoord);
     
+    // Get the average distance across dimensions
+    var coordRange = 0;
+    for (var i = 0; i < this._inputDimensions.length; i++) {
+        coordRange += (maxCoord[i] - minCoord[i]) + 1;
+    };
     
+    //console.log("COORD RANGE");
+    //console.log(coordRange);
+    
+    var avgSpan = coordRange / this._inputDimensions.length;
+    //console.log("Avg span");
+    //console.log(avgSpan);
+    return avgSpan;  
 };
 
-SpatialPooler.prototype._calcDimensionComponentCounts = function() {
+SpatialPooler.prototype._calcDimensionComponentCounts = function(dimensions) {
     /*
-    Returns a list of the counts of elements in each dimension of the input.
-    For example a 3 x 3 x 3 input would have 9 elements per plane, 3 elements
+    Returns a list of the counts of elements in each dimension.
+    For example a 3 x 2 x 4 input would have 6 elements per plane, 3 elements
     per column, and 1 element per row in that column. So this method
-    would return the array [9, 3, 1]. This is used as part of calculating
+    would return the array [6, 3, 1]. This is used as part of calculating
     overlap and inhibition radii.
     
     NOTE: This is a divergence from the cpp/py implementations which call
     this "bounds."
     */
-    var dimensions = this._columnDimensions;
-    // Reverse the dimensions
-    var reversedDims = dimensions.reverse();
     // Get all but the last one
-    var truncatedDims = reversedDims.slice(0,-1);
+    var truncatedDims = dimensions.slice(0,-1);
     // Append that to the array [1]
     var extendedDims = [1].concat(truncatedDims);
     // Calculate an array of cumulative products for that array
-    var cumProduct = arrayCumProduct(extendedDims);
-    // Reverse that resulting array.
-    var dimComponentCounts = cumProduct.reverse();
+    var dimComponentCounts = arrayCumProduct(extendedDims);
     
     return dimComponentCounts;
 };
 
-
-SpatialPooler.prototype._indexToCoords = function(inputIndex) {
+SpatialPooler.prototype._indexToCoords = function(inputIndex,
+                                                  dims,
+                                                  dimCompCounts) {
     /*
-    Returns an array of length this._inputDimensions corresponding to the
+    Returns an array of length dims corresponding to the
     coordinate in input space for the given inputIndex in 1D space
     */
-    coords = [];
-    for (var i = 0; i < this._inputDimensions.length; i++) {
-        var coord = (inputIndex / this._dimComponentCounts[i]) %
-                                                    this._inputDimensions[i];
-        coords.push(val);
+    var coords = [];
+    
+    for (var i = 0; i < dims.length; i++) {
+        var dimComp = dimCompCounts[i];
+        var divStep = Math.floor(inputIndex / dimComp);
+        var coord = Math.floor(inputIndex / dimComp) % dims[i];
+        coords.push(coord);
     };
     return coords;
+};
+
+SpatialPooler.prototype._coordsToIndex = function(coords,
+                                                  dims,
+                                                  dimCompCounts) {
+    /*
+    Returns the index in a 1D array corresponding to the coordinates given in
+    this._inputDimensions.
+    */
+    var index = 0;
+    for (var i = 0; i < dims.length; i++) {
+        index += coords[i] * dimCompCounts[i];
+    };
+    return index
 };
 
 SpatialPooler.prototype._adaptSynapses = function(inputVector, activeColumns){
@@ -864,7 +1028,6 @@ SpatialPooler.prototype._updatePermanencesForColumn = function(perm,
                     assignment is required.
     */
     raisePerm = defaultFor(raisePerm, true);
-    
     // Get a list of indices where potential pool is not 0
     var maskPotential = [];
     for (var i = 0; i < this._potentialPools[index].length; i++) {
@@ -898,6 +1061,8 @@ SpatialPooler.prototype._updatePermanencesForColumn = function(perm,
             newConnected.push(i);
         };
     };
+    //console.log("Connected synapses for this column (in update): ");
+    //console.log(newConnected);
     
     if (index == 0) {
       //console.log("Old Connected:");
@@ -929,33 +1094,55 @@ SpatialPooler.prototype._initPermNotConnected = function(){
 };
     
 SpatialPooler.prototype._initPermanence = function(potential, connectedPct){
+    /*
+    Initializes the permanences of a column. The method
+    returns a 1-D array the size of the input, where each entry in the
+    array represents the initial permanence value between the input bit
+    at the particular index in the array, and the column represented by
+    the 'index' parameter.
+
+    Parameters:
+    ----------------------------
+    potential:      A numpy array specifying the potential pool of the column.
+                    Permanence values will only be generated for input bits 
+                    corresponding to indices for which the mask value is 1.
+    connectedPct:   A value between 0 or 1 specifying the percent of the input 
+                    bits that will start off in a connected state.
+
+    */
     
+    // NOTE: This is a divergence from the cpp/py implementation
+    // Here we use logic similar to selecting a pct of the potential pool
+    // rather than letting a random percentage averaging around connectedPct
+    // be connected.
+    
+    // Create an array where all perms are, by default, zero
     var permanences = [];
     for (var i = 0; i < this._numInputs; i++) {
+        permanences.push(0.0);
+    }
+    
+    // Find the indices of potential that are non-zero
+    var potentialIndices = [];
+    for (var i = 0; i < this._numInputs; i++) {
         if (potential[i] < 1.0) {
-            //console.log("Not a potential connection: " + i);
-            permanences.push(0.0);
             continue;
-        };
-        
-        if (Math.random() <= connectedPct) {
-            permanences.push(this._initPermConnected());
         } else {
-            var permVal = this._initPermNotConnected();
-            // Clip off low values. NOTE: This won't help reduce mem footprint
-            // until a sparse matrix is used in JS implementation.
-            // Kept here to produce similar value distribution to other
-            // implementations.
-            if (permVal < this._synPermTrimThreshold) {
-                //console.log("Potential connection: " + i);
-                //console.log("Clipping one perm val (too low):" + permVal);
-                permanences.push(0.0);
-            } else {
-                permanences.push(permVal);
-            };
+            potentialIndices.push(i);
         };
     };
     
+    // Shuffle those indices and then set connectedPct of them to connected.
+    potentialIndices = shuffle(potentialIndices);
+    var sampleSize = Math.round(connectedPct * potentialIndices.length);
+    for (var i = 0; i < potentialIndices.length; i++) {
+            if (i < sampleSize) {
+                permanences[potentialIndices[i]] = this._initPermConnected();
+            } else {
+                permanences[potentialIndices[i]] = this._initPermNotConnected();
+            }
+    };
+        
     return permanences
 };
 
@@ -966,19 +1153,25 @@ SpatialPooler.prototype._mapPotential = function(index, wrapAround){
     what are the indices of the input vector that are located within the 
     column's potential pool. The return value is a list containing the indices 
     of the input bits. The current implementation of the base class only 
-    supports a 1 dimensional topology of columsn with a 1 dimensional topology 
+    supports a 1 dimensional topology of columns with a 1 dimensional topology 
     of inputs. To extend this class to support 2-D topology you will need to 
     override this method. Examples of the expected output of this method:
     * If the potentialRadius is greater than or equal to the entire input 
       space, (global visibility), then this method returns an array filled with 
       all the indices
     * If the topology is one dimensional, and the potentialRadius is 5, this 
-      method will return an array containing 5 consecutive values centered on 
+      method will return an array containing 11 consecutive values centered on 
       the index of the column (wrapping around if necessary).
-    * If the topology is two dimensional (not implemented), and the 
-      potentialRadius is 5, the method should return an array containing 25 
-      '1's, where the exact indices are to be determined by the mapping from 
-      1-D index to 2-D position.
+    * If the topology is two dimensional, and the potentialRadius is 5, the
+      method should return an array containing 25 '1's, where the exact indices
+      are to be determined by the mapping from 1-D index to 2-D position.
+    
+    NOTE:   If the number of columns and the potentialRadius is small and the
+            input large, you can end up with input bits not being covered by
+            any column connections. i.e. The columns are not evenly distributed
+            over the input, the are added left to right and may not cover the
+            full width. To correct for this if numColumns < numInputs we
+            move the indexes of the columns over a bit.
 
     Parameters:
     ----------------------------
@@ -988,40 +1181,140 @@ SpatialPooler.prototype._mapPotential = function(index, wrapAround){
                     region boundaries ignored.
     */
     
-    // Create an array twice as long, plus one, as the potential radius
-    // e.g. 16 bits - 1 bit - 16 bits
-    var diameter = 2 * (this._potentialRadius + 1)
     var indices = [];
-    // Fill it with the first indices i.e. 0, 1, 2, 3 etc.
-    for (var i = 0; i < diameter; i++) {
-        indices.push(i);
-    };
-    // Shift over so index 0 of that array is the value of the column index
-    // e.g. Column index 1000 - 1000, 1001, 1002 etc.
-    for (var i = 0; i < diameter; i++) {
-        indices[i] += index;
-    };
-    // Shift back so the column index is centered
-    for (var i = 0; i < diameter; i++) {
-        indices[i] -= this._potentialRadius;
-    };
-    // We may want column receptive fields to wrap
-    if (wrapAround === true) {
-        for (var i = 0; i < diameter; i++) {
-          indices[i] = indices[i].mod(this._numInputs);
+    var diameter = 2 * (this._potentialRadius) + 1
+    
+    // If we are doing 2D topology
+    if (this._inputDimensions.length == 2) {
+        
+        //console.log("2D INPUT")
+        
+        // If we have less columns than inputs ...
+        if (this._numColumns < this._numInputs) {
+            
+            //console.log(this._columnDimensions);
+            
+            // Calculate how to ~ evenly distribute our columns in input space
+            var xShift = (this._inputDimensions[0] - this._columnDimensions[0]) / (1 + this._columnDimensions[0]);
+            //console.log("Avg xShift: " + xShift);
+            var yShift = (this._inputDimensions[1] - this._columnDimensions[1]) / (1 + this._columnDimensions[1]);
+            //console.log("Avg yShift: " + yShift);
+            
+            // Calculate our column coordinates in column space
+            var coordInColSpace = this._indexToCoords(index,
+                                                    this._columnDimensions,
+                                                    this._columnDimCompCounts)
+            
+            //console.log("Index:");
+            //console.log(index);
+            //console.log("Coordinates in column space");
+            //console.log(coordInColSpace);
+            
+            // Apply the shift in column space
+            var colXNum = coordInColSpace[0] + 1;
+            var xShift = Math.floor(colXNum * xShift);
+            var colYNum = coordInColSpace[1] + 1;
+            var yShift = Math.floor(colYNum * yShift);      
+            coordInColSpace[0] += xShift;
+            coordInColSpace[1] += yShift;
+            
+            // Shift back to input space
+            index = this._coordsToIndex(coordInColSpace,
+                                        this._inputDimensions,
+                                        this._inputDimCompCounts);
         };
+        
+        var coords = this._indexToCoords(index,
+                                         this._inputDimensions,
+                                         this._inputDimCompCounts)
+        
+        // Create a square area to make it easy
+        // Use pythagorean theorem to find the area of a square with diagonal of
+        // len diameter.
+        var arrayLen = Math.pow(diameter, 2)
+        
+        // Find the top right corner of the area
+        var minCoords = [];
+        for (var i = 0; i < this._inputDimensions.length; i++) {
+            minCoords.push(coords[i] - this._potentialRadius);
+        };
+        
+        // Iterate through all the indices in the area, wrapping if neccessary
+        for (var i = 0; i < diameter; i++) {
+            for (var j = 0; j < diameter; j++) {
+                x = (minCoords[0] + j);
+                y = (minCoords[1] + i);
+                if (wrapAround === true) {
+                    x = x.mod(this._inputDimensions[0]);
+                    y = y.mod(this._inputDimensions[1]);
+                } else {
+                    if (y < 0 || y > this._inputDimensions[1] - 1) {
+                        continue;
+                    }
+                    if (x < 0 || x > this._inputDimensions[0] - 1) {
+                        continue;
+                    }
+                }
+                var areaCoords = [x, y];
+                indices.push(this._coordsToIndex(areaCoords,
+                                                 this._inputDimensions,
+                                                 this._inputDimCompCounts));
+            };
+        };
+        
     } else {
-        // Otherwise remove indices that are outside the range of the input
-        var cleanedIndices = [];
+        
+        //console.log("ONE D INPUT");
+        // Handle the case where we only have a few columns to cover the input
+        // NOTE: This is a divergence from the cpp/py implementation
+        //if (this._numColumns < this._numInputs) {
+        //    var shift = (this._numInputs - this._numColumns) / (1 + this._numColumns);
+        //    var colNum = index + 1;
+        //    var shift = Math.floor(colNum * shift);
+        //    console.log("Shift needed: ");
+        //    console.log(shift);
+        //    index += shift;
+        //};
+        
+        // Fill it with the first indices i.e. 0, 1, 2, 3 etc.
+        //console.log("Diameter")
+        //console.log(diameter);
         for (var i = 0; i < diameter; i++) {
-          if (indices[i] >= 0 && indices[i] < this._numInputs) {
-            cleanedIndices.push(indices[i]);
-          }
+            indices.push(i);
         };
-        indices = cleanedIndices;
+        //console.log("Indices");
+        //console.log(indices);
+        // Shift over so index 0 of that array is the value of the column index
+        // e.g. Column index 1000 - 1000, 1001, 1002 etc.
+        for (var i = 0; i < diameter; i++) {
+            indices[i] += index;
+        };
+        
+        //console.log("Moved indices");
+        //console.log(indices);
+        // Shift back so the column index is centered
+        for (var i = 0; i < diameter; i++) {
+            indices[i] -= this._potentialRadius;
+        };
+        // We may want column receptive fields to wrap
+        if (wrapAround === true) {
+            for (var i = 0; i < diameter; i++) {
+              indices[i] = indices[i].mod(this._numInputs);
+            };
+        } else {
+            // Otherwise remove indices that are outside the range of the input
+            var cleanedIndices = [];
+            for (var i = 0; i < diameter; i++) {
+              if (indices[i] >= 0 && indices[i] < this._numInputs) {
+                cleanedIndices.push(indices[i]);
+              }
+            };
+            indices = cleanedIndices;
+        };
     };
     // Remove duplicate indices
     indices = new Set(indices).array();
+    //console.log(indices);
     
     // Select a subset of the receptive field to serve as the potential pool
     // Because we are seeding the random number generator these selections
@@ -1040,12 +1333,91 @@ SpatialPooler.prototype._mapPotential = function(index, wrapAround){
     return mask
 };
     
-SpatialPooler.prototype._updateDutyCyclesHelper = function(){
-    console.log("Not implemented.")
+SpatialPooler.prototype._updateDutyCyclesHelper = function(dutyCycles,
+                                                           newInput,
+                                                           period) {
+    /*
+    Updates a duty cycle estimate with a new value. This is a helper
+    function that is used to update several duty cycle variables, such as:
+    overlapDutyCucle, activeDutyCycle, minPctDutyCycleBeforeInh,
+    minPctDutyCycleAfterInh, etc. returns the updated duty cycle. Duty cycles
+    are updated according to the following formula:
+
+                  (period - 1)*dutyCycle + newValue
+      dutyCycle := ----------------------------------
+                              period
+
+    Parameters:
+    ----------------------------
+    dutyCycles:     An array containing one or more duty cycle values that need
+                    to be updated
+    newInput:       An array of new values used to update the duty cycle
+    period:         The period of the duty cycle      
+    */
+    console.assert(period >= 1);
+    
+    var newDutyCycles = [];
+    for (var i = 0; i < dutyCycles.length; i++) {
+        newDutyCycles[i] = (dutyCycles[i] * (period - 1.0) + newInput[i]) / period;
+    };
+    
+    return newDutyCycles
 };
     
 SpatialPooler.prototype._updateBoostFactors = function(){
-    console.log("Not implemented.")
+    /*
+    Update the boost factors for all columns. The boost factors are used to 
+    increase the overlap of inactive columns to improve their chances of
+    becoming active and thus encourage participation of more columns in the
+    learning process. This is a line defined as: y = mx + b boost =
+    (1-maxBoost)/minDuty * dutyCycle + maxFiringBoost. Intuitively this means
+    that columns that have been active enough have a boost factor of 1, meaning
+    their overlap is not boosted.
+    
+    NOTE: This is a divergence. In the cpp/py implementation this rule is
+    *not local.* Each column somehow knows about the activity of all other
+    columns regardless of closeness. Here we correct this so each column only
+    worries about its own history. This implements one facet of neural
+    adaptation.
+    
+    Columns whose active duty cycle drops too much are boosted depending on how
+    infrequently they have been active. The more infrequent, the more they are
+    boosted. The exact boost factor is linearly interpolated between the points
+    (dutyCycle:0, boost:maxFiringBoost) and (dutyCycle:minDuty, boost:1.0). 
+
+    b                ^
+    o    maxBoost _  |
+    o                |\
+    s                | \
+    t          1  _  |  \ _ _ _ _ _ _ _
+    F                |   
+    a                +--------------------> 
+    c                    |
+    t             minActiveDutyCycle
+    o            
+    r            
+                     activeDutyCycle
+            
+    */
+    
+    var minActiveDutyCycle = 0.05;
+    for (var i = 0; i < this._numColumns; i++) {
+        // Don't boost if we're above the min duty cycle;
+        if (this._activeDutyCycles[i] > minActiveDutyCycle) {
+            var boost = 1;
+        } else {
+            // Slope
+            var m = (1 - this._maxBoost) / minActiveDutyCycle 
+            var x = this._activeDutyCycles[i]
+            // Y Intercept
+            var b = this._maxBoost
+            var boost =  m * x + b;
+        }
+        this._boostFactors[i] = boost;
+    }
+    
+    //console.log("Boost factors in update boost factors");
+    //console.log(this._boostFactors);
 };
     
 SpatialPooler.prototype._updateBookeepingVars = function(learn){
@@ -1148,9 +1520,12 @@ SpatialPooler.prototype._inhibitColumns = function(overlaps, addNoise){
     // This can be specified by either setting the 'numActiveColumnsPerInhArea' 
     // parameter of the 'localAreaDensity' parameter when initializing the class
     
+    //console.log("Overlaps (in inhibitColumns)");
+    //console.log(overlaps);
+    
     var overlapsCopy = overlaps.slice();
     if (this._localAreaDensity > 0) {
-      var density = this._localAreaDensity;
+        var density = this._localAreaDensity;
     } else {
         //console.log(this._inhibitionRadius);
         var inhibitionArea = Math.pow( (2 * this._inhibitionRadius + 1), 
@@ -1213,13 +1588,15 @@ SpatialPooler.prototype._inhibitColumnsGlobal = function(overlaps, density){
     for (var j = 0; j < overlaps.length; j++) {
       winners.push([j, overlaps[j]]);
     };
-    
-    winners = winners.sort(ComparatorReversed)
-    //console.log("Winners sorted:")
+    //console.log("Winners:")
     //console.log(winners);
+    
+    wSorted = winners.slice().sort(ComparatorReversed);
+    //console.log("Winners sorted:")
+    //console.log(wSorted);
 
     // Get the top numActive columns
-    var finalWinners = winners.slice(0, numActive);
+    var finalWinners = wSorted.slice(0, numActive);
     //console.log("Final Winners");
     //console.log(finalWinners);
     var winningIndices = [];
@@ -1249,16 +1626,50 @@ SpatialPooler.prototype._inhibitColumnsLocal = function(overlaps, density){
                     of survining columns is likely to vary.
     */
     
+    //console.log("Overlaps (in inhibitColumnsLocal)");
+    //console.log(overlaps);
+    
     // Create a holding array for the active column indices
-    var activeColumns = [];
+    var winningColumns = [];
+    
     // Calculate a small value to add to the winning column overlap scores
     var addToWinners = Math.max.apply(null, overlaps) / 1000.0;
     // Loop over each column
     for (var i = 0; i < this._numColumns; i++) {
-        var maskNeighbors = this._getNeighbors2D( i,
+        // Get a list of columns this column can inhibit
+        var maskNeighbors = this._getNeighborsND( i,
                                                  this._columnDimensions,
                                                  this._inhibitionRadius);
+        // Get the overlap scores for those columns
+        var overlapSlice = [];
+        for (var j = 0; j < maskNeighbors.length; j++) {
+            overlapSlice.push(overlaps[maskNeighbors[j]]);
+        };
+        //console.log("Overlap slice: ");
+        //console.log(overlapSlice);
+        // Decide how many should be active in this area
+        // NOTE: This is a divergence from the cpp/py. Here we just use
+        // this._numActiveColumnsPerInhArea rather than calculating it
+        // var numActive = Math.round(.5 + (density * (maskNeighbors.length + 1)))
+        var numActive = this._numActiveColumnsPerInhArea;
+        //console.log("Num active in this area should be: ");
+        //console.log(numActive);
+        var numBigger = 0;
+        for (var j = 0; j < overlapSlice.length; j++) {
+            //console.log("Comparisons: ");
+            //console.log("Slice: " + overlapSlice[j] + " Col Overlap: " + overlaps[i]);
+            if (overlapSlice[j] >= overlaps[i]) {
+                numBigger++;
+            };
+        };
+        if (numBigger < numActive) {
+            //console.log("WINNER!");
+            winningColumns.push(i);;
+        }
+        
     };
+    
+    return winningColumns
 };
     
 SpatialPooler.prototype._getNeighbors1D = function(){
@@ -1302,10 +1713,69 @@ SpatialPooler.prototype._getNeighborsND = function(columnIndex,
     wrapAround = defaultFor(wrapAround, false);
     console.assert(dimensions.length > 0);
     
+    var columnCoords = this._indexToCoords(columnIndex,
+                                           this._columnDimensions,
+                                           this._columnDimCompCounts);
+    //console.log("==============================");
+    //console.log("Column Index");
+    //console.log(columnIndex);
+    //console.log("Column Coords");
+    //console.log(columnCoords);
+    //console.log("Radius in getNeighborsND ");
+    //console.log(radius);
+    var rangeND = [];
+    for (var i = 0; i < this._columnDimensions.length; i++) {
+        var curRange = [];
+        if (wrapAround == true) {
+            console.log("Wrapping!");
+            for (var j = columnCoords[i] - radius; j < columnCoords[i] + radius + 1; j++){
+                var val = j % this._columnDimensions[i];
+                curRange.push[val];
+            };
+        } else {
+            //console.log("No wrap!");
+            for (var j = columnCoords[i] - radius; j < columnCoords[i] + radius + 1; j++){
+                //console.log(j);
+                if (j >= 0 && j < this._columnDimensions[i]) {
+                    curRange.push(j);
+                };
+            };
+        };
+        //console.log("Adding new range");
+        //console.log(curRange);
+        //console.log("------------");
+        rangeND.push(curRange);
+        
+    };
+    
+    var carProd = cartesianProductOf.apply(null, rangeND);
+    
+    //console.log(carProd);
+    var neighbors = [];
+    for (var i = 0; i < carProd.length; i++) {
+        //console.log(carProd[i]);
+        //console.log(this._columnDimCompCounts);
+        var ind = this._coordsToIndex(carProd[i],
+                                      this._columnDimensions,
+                                      this._columnDimCompCounts);
+        //console.log(ind);
+        neighbors.push(ind);
+    }
+    
+    // Remove duplicates and this column's index
+    neighbors = new Set(neighbors).remove(columnIndex).array();
+    //console.log("Neighbors: ");
+    //console.log(neighbors);
+    return neighbors;
+    
 };
     
 SpatialPooler.prototype._isUpdateRound = function(){
-    console.log("Not implemented.");
+    /*
+    Returns true if the enough rounds have passed to warrant updates
+    */
+    return (this._iterationNum % this._updatePeriod) == 0
+
 };
     
 SpatialPooler.prototype._seed = function(){

@@ -10,11 +10,11 @@
 			background-color: #000000;
 		}
 	</style>
-	<script src="js/pixi.dev.js"></script>
-  <script src="js/Stats.js"></script>
-  <script src="js/simplesets.js"></script>
-  <script src="js/seedrandom.min.js"></script>
-  <script src="js/spatialPooler.js"></script>
+	<script src="../src/pixi.dev.js"></script>
+  <script src="../src/Stats.js"></script>
+  <script src="../src/simplesets.js"></script>
+  <script src="../src/seedrandom.min.js"></script>
+  <script src="../src/SpatialPooler.js"></script>
 
 </head>
 <body>
@@ -53,7 +53,7 @@
 
 	}
 
-	// add the renderer view element to the DOM
+	// Add the renderer view element to the DOM
 	container.appendChild(renderer.view);
 
 	// STATS
@@ -65,8 +65,31 @@
 	
 	requestAnimFrame( animate );
   
+  // Our total frame counter
   counter = 0;
+
+  /**************************************************************************/
+  /* IMAGE BOUNDING BOX
+   */
+  
+  // Create the image section bounding box
+  var sbbg = new PIXI.Graphics();
+  sbbg.lineStyle(1, 0x000000, 1);
+  sbbg.drawRect(0, 0, 130, 130);
+  sourceBoundingBoxTexture = sbbg.generateTexture();
+  sourceBoundingBox = new PIXI.Sprite(sourceBoundingBoxTexture);
+  sourceBoundingBox.position.x = -22;
+  sourceBoundingBox.position.y = 78;
+  sourceBoundingBox.scale.x = 2;
+  sourceBoundingBox.scale.y = 2;
+
+  stage.addChild(sourceBoundingBox);
+  
+  /**************************************************************************/
+  /* IMAGE AND IMAGE PATCH EXTRACTION
+   */
 	
+  // Extract image sections from our large input image
   var sprite = new PIXI.Sprite(PIXI.Texture.Draw(function (canvas) {
       // We are now in a 2D context 
       canvas.width = 128;   
@@ -78,34 +101,44 @@
       // Create a new image.
       var img = new Image();
     
-      // Once it's loaded draw the image on canvas and invert the colors.
+      // Define an on load handler for this image
       img.addEventListener('load', function () {
         
+        // Where the image should be put on the canvas
         var x = 0, y = 0;
+        
+        // How large our image sections will be
+        var sectionWidth = sectionHeight = 32;
     
         // Draw the image on canvas.
         context.drawImage(this, x, y);
         
+        // Extract image sections from canvas
         imageSections = []
-        for (var i = 0; i < 4 * 32; i += 32) {
-            for (var j = 0; j < 4 * 32; j += 32) {
-              // Get the pixels.
-              var imgd = context.getImageData(j, i, 32, 32);
+        for (var i = 0; i < 4 * sectionHeight; i += sectionHeight) {
+            for (var j = 0; j < 4 * sectionWidth; j += sectionWidth) {
+              // Get the pixel data for this section
+              var imgd = context.getImageData(j, i, sectionWidth, sectionHeight);
               var pix = imgd.data;
               var redArray = [];
+              var r = -1;
+              // Now we have an array of length sectionWidth*sectionHeight*4
+              // Break that up into rows for later reconstruction
               for (var k = 0; k < pix.length; k += 4) {
+                  // Every 32 pixels we want a new row
+                  if ((k % (sectionWidth * 4)) == 0){
+                    r++;
+                    redArray.push([]);
+                  }
                   if (pix[k] > 100) {
-                    redArray.push(0);
+                    redArray[r].push(0);
                   } else {
-                    redArray.push((255 - pix[k]) / 255); // red
+                    redArray[r].push((255 - pix[k]) / 255); // red
                   }
               }
               imageSections.push(redArray);
             }
         }
-    
-        // Draw the ImageData object.
-        context.putImageData(imgd, 0, 0);
       }, false);
     
       img.src = 'images/Image2.jpg';
@@ -116,9 +149,14 @@
   sprite.position.y = 100;
   
 	stage.addChild(sprite);
+
+
+  /**************************************************************************/
+  /* IMAGE PATCH BOUNDING BOX
+   */
   
+  // Create the image section bounding box
   var graphics = new PIXI.Graphics();
-  // draw a rectangel
   graphics.lineStyle(2, 0x0000FF, 1);
   graphics.drawRect(0, 0, 64, 64);
   squareT = graphics.generateTexture();
@@ -128,14 +166,22 @@
 
   stage.addChild(square);
   
-  numColumns = 32;
-  sp = new SpatialPooler(inputDimensions = [1024],
-                          columnDimensions = [numColumns],
-                          potentialRadius = 1024,
+  /**************************************************************************/
+  /* SPATIAL POOLER SETUP
+   */
+  
+  inputWidth = 32;
+  inputHeight = 32;
+  numColsX = 4;
+  numColsY = 6;
+  numColumns = numColsX * numColsY;
+  sp = new SpatialPooler(inputDimensions = [inputWidth, inputHeight],
+                          columnDimensions = [numColsX, numColsY],
+                          potentialRadius = 6,
                           potentialPct = 1,
-                          globalInhibition = true,
+                          globalInhibition = false,
                           localAreaDensity = -1.0,
-                          numActiveColumnsPerInhArea = 3,
+                          numActiveColumnsPerInhArea = 1,
                           stimulusThreshold = 0,
                           synPermInactiveDec = 0.005,
                           synPermActiveInc = 0.015,
@@ -146,51 +192,81 @@
                           maxBoost = 10.0,
                           seed = -1,
                           spVerbosity = 0,
-                          addNoise = false);
+                          addNoise = false,
+                          wrapPotentialPools = false);
       
 
   activeArray = [];
   for (var i = 0; i < sp._numColumns; i++) {
     activeArray.push(0);
   }
+  
+  /**************************************************************************/
+  /* Create textures from color
+   */
+  
+  var colorTextures = {};
+  function getTexture(color) {
+    if(colorTextures[color] === undefined) {
+      var canvas = document.createElement('canvas')
+      canvas.width = 1;
+      canvas.height = 1;
+      ctx = canvas.getContext('2d');
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.rect(0,0,1,1);
+      ctx.fill();
+      ctx.closePath();
+      colorTextures[color] = PIXI.Texture.fromCanvas(canvas);
+    }
+    return colorTextures[color];
+  };
+  
 
 	function animate() {
 
 	    requestAnimFrame( animate );
-
-      // Run sp
       
-
-      
-      var input = imageSections[counter % 16];
-      sp.compute(input, learn = true, activeArray);
-      if (counter < 400) {
+      if (counter < 1000) {
+        
+          // Run sp
+          // We have divided our large image into 16 patches so start over
+          // with the first patch ever 16 iterations
+          var input = imageSections[counter % 16];
+          //console.log(input);
+          var learn = true;
+          //if (counter > 100) {
+          //  learn = false;
+          //}
+          sp.compute(input, learn, activeArray);
           //console.log("Active array after input:")
           //console.log(activeArray);
           
-          for (var i = stage.children.length - 1; i >=2; i--) {
+          // Clean up from last frame
+          for (var i = stage.children.length - 1; i >=3; i--) {
               stage.removeChild(stage.children[i]);
           };
           
+          /********************************************************************/
+          /* PERMANENCE DISPLAY BOXES
+           */
           var row = (counter % 4)
           var col = Math.floor((counter % 16) / 4);
           square.position.x = (row * 64) - 10;
           square.position.y = (col* 64) + 90;
           
-          var permBoxesPerDisplayCol = 8;
-          
           for (var i = 0; i < numColumns; i++) {
               var sprite = new PIXI.Sprite(PIXI.Texture.Draw(function (canvas) {
-                //we are now in a 2D context
-                //you need to specify your canvas width and height otherwise
-                //it'll have a size of 0x0 and you'll get an empty sprite
-                canvas.width = 32;   
-                canvas.height = 32;
+                // We are now in a 2D context. You need to specify your canvas
+                // width and height otherwise it'll have a size of 0x0 and
+                // you'll get an empty sprite
+                canvas.width = inputWidth;   
+                canvas.height = inputHeight;
             
                 var ctx = canvas.getContext('2d');  //get  canvas 2D context
                 
                 ctx.fillStyle = "black";
-                ctx.fillRect(0,0,canvas.width,canvas.height);
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
                 
                 var pix = ctx.createImageData(canvas.width, canvas.height);
                 for (var y = 0; y < pix.data.length; y+=4) {
@@ -204,20 +280,38 @@
                 ctx.putImageData(pix, 0, 0);		
               }));
               
-              sprite.scale.x = 1.5;
-              sprite.scale.y = 1.5;
-              sprite.position.x = 400 + Math.floor(i / permBoxesPerDisplayCol) * 64;
-              sprite.position.y = 0 + (32 * 1.5) * (i % permBoxesPerDisplayCol);
+              var box = new PIXI.DisplayObjectContainer();
               
-              stage.addChild(sprite);
+              //console.log(activeArray[i]);
+              if (activeArray[i] > 0) {
+                borderBoxColor = "blue";
+              } else {
+                borderBoxColor = "black";
+              }
+              
+              var borderBox = new PIXI.Sprite(getTexture(borderBoxColor));
+              var borderWidth = 2;
+              borderBox.width = inputWidth + borderWidth * 2;
+              borderBox.height = inputHeight + borderWidth * 2;
+              box.addChild(borderBox);
+              
+                            
+              sprite.position.x = borderWidth;
+              sprite.position.y = borderWidth;
+              box.addChild(sprite);
+              
+              var scaling = 2;
+              var spacing = 2;
+              box.scale.x = scaling;
+              box.scale.y = scaling;
+              box.position.x = 400 + ((i % numColsX) * ((borderBox.width + spacing) * scaling));
+              box.position.y = 0 + (Math.floor(i / numColsX) * ((borderBox.height + spacing) * scaling));
+              
+              stage.addChild(box);
           }
-          
-          
       }
-
       
       counter++;
-
       
 	    // Update our stats counter
 	    stats.update();

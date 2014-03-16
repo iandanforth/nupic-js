@@ -10,9 +10,9 @@
 			    background-color: #000000;
 		    }
 	    </style>
-      <script src="js/simplesets.js"></script>
-	    <script src="js/seedrandom.min.js"></script>
-	    <script src="js/spatialPooler.js"></script>
+      <script src="../src/simplesets.js"></script>
+	    <script src="../src/seedrandom.min.js"></script>
+	    <script src="../src/SpatialPooler.js"></script>
 
 
     </head>
@@ -21,51 +21,85 @@
 	<div id="container"></div>
 	
 	<script>
-      var numColumns = 5
-	    var sp = new SpatialPooler(inputDimensions = [1024],
-                                 columnDimensions = [10],
-                                 potentialRadius = 1024,
-                                 potentialPct = 1,
-                                 globalInhibition = true,
+      var inputWidth = 8;
+      var inputHeight = 8;
+      var numInputs = inputWidth * inputHeight;
+      var colWidth = 4;
+      var colHeight = 2;
+      var numColumns = colWidth * colHeight;
+	    var sp = new SpatialPooler(inputDimensions = [inputWidth, inputHeight],
+                                 columnDimensions = [colWidth, colHeight],
+                                 potentialRadius = 16,
+                                 potentialPct = 0.5,
+                                 globalInhibition = false,
                                  localAreaDensity = -1.0,
-                                 numActiveColumnsPerInhArea = 3,
+                                 numActiveColumnsPerInhArea = 1,
                                  stimulusThreshold = 0,
-                                 synPermInactiveDec = 0.0001,
+                                 synPermInactiveDec = 0.01,
                                  synPermActiveInc = 0.1,
                                  synPermConnected = 0.10,
                                  minPctOverlapDutyCycle = 0.001,
-                                 minPctActiveDutyCycle = 0.1,
+                                 minPctActiveDutyCycle = 0.001,
                                  dutyCyclePeriod = 1000,
                                  maxBoost = 10.0,
-                                 seed = -1,
+                                 seed = 1956,
                                  spVerbosity = 0,
-                                 addNoise = false);
+                                 addNoise = true,
+                                 wrapPotentialPools = true,
+                                 initConnectedPct = 0.5);
       
       console.log("Num inputs: ");
       console.log(sp._numInputs);
       console.log("Num columns: ");
       console.log(sp._numColumns);
 
-      input = [];
-      for (var i = 0; i < sp._numInputs; i++) {
-          var val = Math.random();
-          input.push(val);
-      }
+      //input = [];
+      //var x = 3;
+      //var y = 3;
+      //var z = 3;
+      //for (var i = 0; i < x; i++) {
+      //    input.push([]);
+      //    for (var j = 0; j < y; j++) {
+      //        input[i].push([]);
+      //        for (var k = 0; k < z; k++) {
+      //            var val = Math.random();
+      //            input[i][j].push(val);
+      //        };
+      //    };
+      //};
       
-      //console.log(input.length);
+      input = [];
+      var x = inputWidth;
+      var y = inputHeight;
+      for (var i = 0; i < x; i++) {
+          input.push([]);
+          for (var j = 0; j < y; j++) {
+              var val = Math.random();
+              input[i].push(val);
+          };
+      };
+      
+      //input = [];
+      //for (var i = 0; i < numInputs; i++) {
+      //  input.push(1.0);
+      //}
+      
+      console.log("Input");
+      //console.log(input);
+      console.log(input.length);
       
       activeArray = [];
       for (var i = 0; i < numColumns; i++) {
         activeArray.push(0);
       }
       
-      for (var i = 0; i < sp._numInputs; i++) {
-          console.log(sp._permanences[0][i]);
-      }
+      //for (var i = 0; i < sp._numInputs; i++) {
+      //    console.log(sp._permanences[0][i]);
+      //}
       
       sp.compute(input, learn = true, activeArray);
-      console.log("Active array after input1:")
-      console.log(activeArray);
+      //console.log("Active array after input1:")
+      //console.log(activeArray);
       
 
       
