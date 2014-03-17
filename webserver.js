@@ -5,9 +5,23 @@ var port = 8000;
 var serverUrl = "127.0.0.1";
  
 var http = require("http");
-var path = require("path"); 
-var fs = require("fs"); 		
- 
+var path = require("path");
+var fs = require("fs");
+
+function getFile(localPath, res, mimeType) {
+	fs.readFile(localPath, function(err, contents) {
+		if(!err) {
+			res.setHeader("Content-Length", contents.length);
+			res.setHeader("Content-Type", mimeType);
+			res.statusCode = 200;
+			res.end(contents);
+		} else {
+			res.writeHead(500);
+			res.end();
+		}
+	});
+}
+
 console.log("Starting web server at " + serverUrl + ":" + port);
  
 http.createServer( function(req, res) {
@@ -49,17 +63,3 @@ http.createServer( function(req, res) {
 	}
  
 }).listen(port, serverUrl);
- 
-function getFile(localPath, res, mimeType) {
-	fs.readFile(localPath, function(err, contents) {
-		if(!err) {
-			res.setHeader("Content-Length", contents.length);
-			res.setHeader("Content-Type", mimeType);
-			res.statusCode = 200;
-			res.end(contents);
-		} else {
-			res.writeHead(500);
-			res.end();
-		}
-	});
-}
