@@ -506,14 +506,20 @@
         
         // Store this as an accessible property
         this.boostedOverlaps = boostedOverlaps
-        //console.log("Boosted overlaps: ");
-        //console.log(this.boostedOverlaps);
         
+        //if (this._numColumns == 5) {
+        //    console.log("Boosted overlaps: ");
+        //    console.log(this.boostedOverlaps);
+        //}
+
         var activeColumns = this._inhibitColumns(this.boostedOverlaps,
                                                  this._addNoise);
         
-        //console.log("Active Columns after inhibition");
-        //console.log(activeColumns);
+        //if (this._numColumns == 5) {
+        //    console.log("Active Columns after inhibition");
+        //    console.log(activeColumns);
+        //}
+
         if ( learn === true) {
             this._adaptSynapses(oneDInputVector, activeColumns);
             this._updateDutyCycles(overlaps, activeColumns);
@@ -539,19 +545,26 @@
             activeColumns = this._stripNeverLearned(activeColumns);
         };
         
-        //console.log("Active Columns after adaptSynapses");
-        //console.log(activeColumns);
-        
+        //if (this._numColumns) {
+        //    console.log("Active Columns after adaptSynapses");
+        //    console.log(activeColumns);
+        //}
+
         // Clear out the active array so we can refill it
         for (var i = 0; i < activeArray.length; i++) {
             activeArray[i] = 0;
         };
+        
         // Set new values
         for (var i = 0; i < activeColumns.length; i++) {
-            activeArray[activeColumns[i]] = this.boostedOverlaps[i];
+            activeArray[activeColumns[i]] = this.boostedOverlaps[activeColumns[i]];
         }
-        //console.log("Active array");
-        //console.log(activeArray);
+        
+        //if (this._numColumns == 5) {
+        //    console.log("Final Active array");
+        //    console.log(activeArray);
+        //}
+
     };
 
 
@@ -1462,10 +1475,12 @@
         for (var i = 0; i < this._numColumns; i++) {
             // Look up the connected synapses for each column. These values
             // correspond to indices in the input.
-            //console.log("Input: ");
-            //console.log(inputVector);
-            //console.log("Column " + i + ":");
-            //console.log(this._connectedSynapses[i]);
+            //if (this._numColumns == 5 && this._iterationLearnNum > 1000) {
+            //    console.log("Input: ");
+            //    console.log(inputVector);
+            //    console.log("Column " + i + ":");
+            //    console.log(this._connectedSynapses[i]);
+            //}
             var overlap = 0;
             for (var j = 0; j < this._connectedSynapses[i].length; j++){
                 //console.log("Is input bit " +
@@ -1474,27 +1489,31 @@
                 // NOTE: This is a divergence from the cpp/python code as it
                 // supports scalar inputs between 0.0 and 1.0
                 var inVal = inputVector[this._connectedSynapses[i][j]];
-                if (inVal < 0 || inVal > 1) {
-                    throw "Input Error: Values in the input vector must be " +
-                    "between 0.0 and 1.0";
-                };
+                //if (inVal < 0 || inVal > 1) {
+                //    throw "Input Error: Values in the input vector must be " +
+                //    "between 0.0 and 1.0";
+                //};
                 overlap += inVal;
             };
             overlaps.push(overlap);
         };
         
-        //console.log("Overlaps before thresholding:")
-        //console.log(overlaps);
-        
+        //if (this._numColumns == 5) {
+        //    console.log("Overlaps before thresholding:")
+        //    console.log(overlaps);
+        //}
         // Zero out columns that didn't meet _stimulusThreshold
         for (var i = 0; i < overlaps.length; i++) {
             if (overlaps[i] < this._stimulusThreshold) {
                 overlaps[i] = 0;
             };
         }
-        //console.log("Overlaps after thresholding:")
-        //console.log(overlaps);
-
+        
+        //if (this._numColumns == 5 && this._iterationLearnNum > 1000) {
+        //    console.log("Overlaps after thresholding:")
+        //    console.log(overlaps);
+        //}
+        
         return overlaps;
     };
         
