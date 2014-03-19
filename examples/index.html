@@ -2,7 +2,7 @@
 <!DOCTYPE HTML>
 <html>
 <head>
-	<title>pixi.js example 1</title>
+	<title>Spatial Pooler - Demo</title>
 	<style>
 		body {
 			margin: 0;
@@ -42,7 +42,7 @@
 	var stage = new PIXI.Stage(0XFFFFFF);
 
 	// create a renderer instance
-	var renderer = new PIXI.WebGLRenderer(window.innerWidth, window.innerHeight);
+	var renderer = new PIXI.CanvasRenderer(window.innerWidth, window.innerHeight);
 	
 	// Update if the browser window is resized
 	window.addEventListener( 'resize', onWindowResize, false );
@@ -64,6 +64,7 @@
 	container.appendChild( stats.domElement );
 	
 	requestAnimFrame( animate );
+  
   
   // Our total frame counter
   counter = 0;
@@ -90,6 +91,7 @@
    */
 	
   // Extract image sections from our large input image
+  imageSections = [];
   var sprite = new PIXI.Sprite(PIXI.Texture.Draw(function (canvas) {
       // We are now in a 2D context 
       canvas.width = 128;   
@@ -114,7 +116,6 @@
         context.drawImage(this, x, y);
         
         // Extract image sections from canvas
-        imageSections = []
         for (var i = 0; i < 4 * sectionHeight; i += sectionHeight) {
             for (var j = 0; j < 4 * sectionWidth; j += sectionWidth) {
               // Get the pixel data for this section
@@ -222,12 +223,84 @@
     return colorTextures[color];
   };
   
+  /********************************************************************/
+  /* PERMANENCE DISPLAY BOXES
+   */
+  var row = (counter % 4)
+  var col = Math.floor((counter % 16) / 4);
+  square.position.x = (row * 64) - 10;
+  square.position.y = (col* 64) + 90;
+  
+  permSprites = [];
+  borderSprites = [];
+  for (var i = 0; i < numColumns; i++) {
+    
+      // Generate the perms texture
+      var sprite = new PIXI.Sprite(PIXI.Texture.Draw(function (canvas) {
+        // We are now in a 2D context. You need to specify your canvas
+        // width and height otherwise it'll have a size of 0x0 and
+        // you'll get an empty sprite
+        canvas.width = inputWidth;   
+        canvas.height = inputHeight;
+    
+        var ctx = canvas.getContext('2d');  //get  canvas 2D context
+        
+        ctx.fillStyle = "black";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        var pix = ctx.createImageData(canvas.width, canvas.height);
+        for (var y = 0; y < pix.data.length; y+=4) {
+            var val = sp._permanences[i][y/4]
+            pix.data[y] = 255   - val * 255;
+            pix.data[y+1] = 255 - val * 255;
+            pix.data[y+2] = 255 - val * 255;
+            pix.data[y+3] = 255;
+        };
+     
+        ctx.putImageData(pix, 0, 0);		
+      }));
+      permSprites.push(sprite);
+      
+      // Create the box that will contain the perms and a border
+      var box = new PIXI.DisplayObjectContainer();
+      
+      //console.log(activeArray[i]);
+      if (activeArray[i] > 0) {
+        borderBoxColor = "blue";
+      } else {
+        borderBoxColor = "black";
+      }
+      
+      // Creating the background for the box
+      var borderBox = new PIXI.Sprite(getTexture(borderBoxColor));
+      var borderWidth = 2;
+      borderBox.width = inputWidth + borderWidth * 2;
+      borderBox.height = inputHeight + borderWidth * 2;
+      borderSprites.push(borderBox);
+      box.addChild(borderBox);
+      
+      // Add in the perms texture layer
+      sprite.position.x = borderWidth;
+      sprite.position.y = borderWidth;
+      box.addChild(sprite);
+      
+      // Box placement on the stage
+      var scaling = 2;
+      var spacing = 2;
+      box.scale.x = scaling;
+      box.scale.y = scaling;
+      box.position.x = 400 + ((i % numColsX) * ((borderBox.width + spacing) * scaling));
+      box.position.y = 0 + (Math.floor(i / numColsX) * ((borderBox.height + spacing) * scaling));
+      
+      stage.addChild(box);
+  }
+  
 
 	function animate() {
 
 	    requestAnimFrame( animate );
       
-      if (counter < 1000) {
+      if (counter < 10000) {
         
           // Run sp
           // We have divided our large image into 16 patches so start over
@@ -242,11 +315,6 @@
           //console.log("Active array after input:")
           //console.log(activeArray);
           
-          // Clean up from last frame
-          for (var i = stage.children.length - 1; i >=3; i--) {
-              stage.removeChild(stage.children[i]);
-          };
-          
           /********************************************************************/
           /* PERMANENCE DISPLAY BOXES
            */
@@ -256,31 +324,31 @@
           square.position.y = (col* 64) + 90;
           
           for (var i = 0; i < numColumns; i++) {
-              var sprite = new PIXI.Sprite(PIXI.Texture.Draw(function (canvas) {
-                // We are now in a 2D context. You need to specify your canvas
-                // width and height otherwise it'll have a size of 0x0 and
-                // you'll get an empty sprite
-                canvas.width = inputWidth;   
-                canvas.height = inputHeight;
             
-                var ctx = canvas.getContext('2d');  //get  canvas 2D context
-                
-                ctx.fillStyle = "black";
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-                
-                var pix = ctx.createImageData(canvas.width, canvas.height);
-                for (var y = 0; y < pix.data.length; y+=4) {
-                    var val = sp._permanences[i][y/4]
-                    pix.data[y] = 255   - val * 255;
-                    pix.data[y+1] = 255 - val * 255;
-                    pix.data[y+2] = 255 - val * 255;
-                    pix.data[y+3] = 255;
+              // Update the perms texture
+              permSprites[i].setTexture(PIXI.Texture.Draw(function (canvas) {
+                  // We are now in a 2D context. You need to specify your canvas
+                  // width and height otherwise it'll have a size of 0x0 and
+                  // you'll get an empty sprite
+                  canvas.width = inputWidth;   
+                  canvas.height = inputHeight;
+              
+                  var ctx = canvas.getContext('2d');  //get  canvas 2D context
+                  
+                  ctx.fillStyle = "black";
+                  ctx.fillRect(0, 0, canvas.width, canvas.height);
+                  
+                  var pix = ctx.createImageData(canvas.width, canvas.height);
+                  for (var y = 0; y < pix.data.length; y+=4) {
+                      var val = sp._permanences[i][y/4]
+                      pix.data[y] = 255   - val * 255;
+                      pix.data[y+1] = 255 - val * 255;
+                      pix.data[y+2] = 255 - val * 255;
+                      pix.data[y+3] = 255;
                 };
              
                 ctx.putImageData(pix, 0, 0);		
               }));
-              
-              var box = new PIXI.DisplayObjectContainer();
               
               //console.log(activeArray[i]);
               if (activeArray[i] > 0) {
@@ -289,25 +357,9 @@
                 borderBoxColor = "black";
               }
               
-              var borderBox = new PIXI.Sprite(getTexture(borderBoxColor));
-              var borderWidth = 2;
-              borderBox.width = inputWidth + borderWidth * 2;
-              borderBox.height = inputHeight + borderWidth * 2;
-              box.addChild(borderBox);
-              
-                            
-              sprite.position.x = borderWidth;
-              sprite.position.y = borderWidth;
-              box.addChild(sprite);
-              
-              var scaling = 2;
-              var spacing = 2;
-              box.scale.x = scaling;
-              box.scale.y = scaling;
-              box.position.x = 400 + ((i % numColsX) * ((borderBox.width + spacing) * scaling));
-              box.position.y = 0 + (Math.floor(i / numColsX) * ((borderBox.height + spacing) * scaling));
-              
-              stage.addChild(box);
+              // Creating the background for the box
+              borderSprites[i].texture.destroy();
+              borderSprites[i].setTexture(getTexture(borderBoxColor));
           }
       }
       

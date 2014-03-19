@@ -5,15 +5,17 @@
 /*********************************/
 // TODO - Find a better place for these
 
-// JAVASCRIPT MOD BUG FIX
-Number.prototype.mod = function(n) {
-  return ((this%n)+n)%n;
-}
+
 
 // This function is anonymous and immediately executed in order to 
 // keep all values declared within the function scoped only within the 
 // function, which prevents global namespace pollution.
 (function() {
+
+    // JAVASCRIPT MOD BUG FIX
+    Number.prototype.mod = function(n) {
+      return ((this%n)+n)%n;
+    }
 
     // http://www.codinghorror.com/blog/2007/12/the-danger-of-naivete.html
     function shuffle(arr) {
