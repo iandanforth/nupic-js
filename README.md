@@ -6,11 +6,12 @@ A port of NuPIC to JavaScript
 
 Usage:
 
-	git clone git@github.com:iandanforth/nupic-js.git
-	cd nupic-js
-	node webserver.js
-	[In Chrome]
-	http://localhost:8000/examples/index.html
+  git clone git@github.com:iandanforth/nupic-js.git
+  cd nupic-js
+  npm install .
+  npm start
+  [In Chrome]
+  http://localhost:8000/examples/index.html
 
 Things to play with:
 
