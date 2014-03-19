@@ -1,0 +1,543 @@
+
+<!DOCTYPE HTML>
+<html>
+<head>
+	<title>Spatial Pooler - Demo</title>
+	<style>
+		body {
+			margin: 0;
+			padding: 0;
+			background-color: #000000;
+		}
+	</style>
+	<script src="../src/pixi.dev.js"></script>
+  <script src="../src/Stats.js"></script>
+  <script src="../src/simplesets.js"></script>
+  <script src="../src/seedrandom.min.js"></script>
+  <script src="../src/SpatialPooler.js"></script>
+
+</head>
+<body>
+    
+	<div id="container"></div>
+  <canvas id="myCanvas" width="128" height="128"></canvas>
+
+	<script>
+  
+  // Update PIXI to get canvas features
+  // http://www.html5gamedevs.com/topic/518-hack-making-all-2d-drawing-functions-available-to-pixi/
+  PIXI.Texture.Draw = function (cb) {
+            var canvas = document.createElement('canvas');
+            if (typeof cb == 'function') cb(canvas);
+            return PIXI.Texture.fromCanvas(canvas);
+  }
+
+	// Common global variables
+	var stats;
+	
+	// DOM
+	var container = document.getElementById( 'container' );
+
+	// create an new instance of a pixi stage
+	var stage = new PIXI.Stage(0XFFFFFF);
+
+	// create a renderer instance
+	var renderer = new PIXI.CanvasRenderer(window.innerWidth, window.innerHeight);
+	
+	// Update if the browser window is resized
+	window.addEventListener( 'resize', onWindowResize, false );
+	
+	function onWindowResize() {
+
+	    renderer.resize( window.innerWidth, window.innerHeight );
+
+	}
+
+	// Add the renderer view element to the DOM
+	container.appendChild(renderer.view);
+
+	// STATS
+	stats = new Stats();
+	stats.domElement.style.position = 'absolute';
+	stats.domElement.style.bottom = '0px';
+	stats.domElement.style.zIndex = 100;
+	container.appendChild( stats.domElement );
+	
+	requestAnimFrame( animate );
+  
+  
+  // Our total frame counter
+  counter = 0;
+
+  /**************************************************************************/
+  /* IMAGE BOUNDING BOX
+   */
+  
+  // Create the image section bounding box
+  var sbbg = new PIXI.Graphics();
+  sbbg.lineStyle(1, 0x000000, 1);
+  sbbg.drawRect(0, 0, 130, 130);
+  sourceBoundingBoxTexture = sbbg.generateTexture();
+  sourceBoundingBox = new PIXI.Sprite(sourceBoundingBoxTexture);
+  sourceBoundingBox.position.x = -22;
+  sourceBoundingBox.position.y = 78;
+  sourceBoundingBox.scale.x = 2;
+  sourceBoundingBox.scale.y = 2;
+
+  stage.addChild(sourceBoundingBox);
+  
+  /**************************************************************************/
+  /* IMAGE AND IMAGE PATCH EXTRACTION
+   */
+	
+  // Extract image sections from our large input image
+  imageSections = [];
+  var sprite = new PIXI.Sprite(PIXI.Texture.Draw(function (canvas) {
+      // We are now in a 2D context 
+      canvas.width = 128;   
+      canvas.height = 128;
+      
+      // Get canvas 2D context
+      var context = canvas.getContext('2d');  
+      
+      // Create a new image.
+      var img = new Image();
+    
+      // Define an on load handler for this image
+      img.addEventListener('load', function () {
+        
+        // Where the image should be put on the canvas
+        var x = 0, y = 0;
+        
+        // How large our image sections will be
+        var sectionWidth = sectionHeight = 32;
+    
+        // Draw the image on canvas.
+        context.drawImage(this, x, y);
+        
+        // Extract image sections from canvas
+        for (var i = 0; i < 4 * sectionHeight; i += sectionHeight) {
+            for (var j = 0; j < 4 * sectionWidth; j += sectionWidth) {
+              // Get the pixel data for this section
+              var imgd = context.getImageData(j, i, sectionWidth, sectionHeight);
+              var pix = imgd.data;
+              var redArray = [];
+              var r = -1;
+              // Now we have an array of length sectionWidth*sectionHeight*4
+              // Break that up into rows for later reconstruction
+              for (var k = 0; k < pix.length; k += 4) {
+                  // Every 32 pixels we want a new row
+                  if ((k % (sectionWidth * 4)) == 0){
+                    r++;
+                    redArray.push([]);
+                  }
+                  if (pix[k] > 100) {
+                    redArray[r].push(0);
+                  } else {
+                    redArray[r].push((255 - pix[k]) / 255); // red
+                  }
+              }
+              imageSections.push(redArray);
+            }
+        }
+      }, false);
+    
+      img.src = 'images/Image2.jpg';
+  }));
+
+  sprite.scale.x = 2;
+  sprite.scale.y = 2;
+  sprite.position.y = 100;
+  
+	stage.addChild(sprite);
+
+
+  /**************************************************************************/
+  /* IMAGE PATCH BOUNDING BOX
+   */
+  
+  // Create the image section bounding box
+  var graphics = new PIXI.Graphics();
+  graphics.lineStyle(2, 0x0000FF, 1);
+  graphics.drawRect(0, 0, 64, 64);
+  squareT = graphics.generateTexture();
+  square = new PIXI.Sprite(squareT);
+  square.position.x = -10;
+  square.position.y = 90;
+
+  stage.addChild(square);
+  
+  /**************************************************************************/
+  /* SPATIAL POOLER SETUP
+   */
+  
+  inputWidth = 32;
+  inputHeight = 32;
+  numColsX = 4;
+  numColsY = 6;
+  numColumns = numColsX * numColsY;
+  sp = new SpatialPooler(inputDimensions = [inputWidth, inputHeight],
+                          columnDimensions = [numColsX, numColsY],
+                          potentialRadius = 6,
+                          potentialPct = 1,
+                          globalInhibition = true,
+                          localAreaDensity = -1.0,
+                          numActiveColumnsPerInhArea = 4,
+                          stimulusThreshold = 0,
+                          synPermInactiveDec = 0.005,
+                          synPermActiveInc = 0.015,
+                          synPermConnected = 0.60,
+                          minPctOverlapDutyCycle = 0.001,
+                          minPctActiveDutyCycle = 0.1,
+                          dutyCyclePeriod = 1000,
+                          maxBoost = 10.0,
+                          seed = -1,
+                          spVerbosity = 0,
+                          addNoise = false,
+                          wrapPotentialPools = false);
+      
+
+  activeArray = [];
+  for (var i = 0; i < sp._numColumns; i++) {
+    activeArray.push(0);
+  }
+  
+  /**************************************************************************/
+  /* Create textures from color
+   */
+  
+  var colorTextures = {};
+  function getTexture(color) {
+    if(colorTextures[color] === undefined) {
+      var canvas = document.createElement('canvas')
+      canvas.width = 1;
+      canvas.height = 1;
+      ctx = canvas.getContext('2d');
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.rect(0,0,1,1);
+      ctx.fill();
+      ctx.closePath();
+      colorTextures[color] = PIXI.Texture.fromCanvas(canvas);
+    }
+    return colorTextures[color];
+  };
+  
+  /********************************************************************/
+  /* PERMANENCE DISPLAY BOXES
+   */
+  var row = (counter % 4)
+  var col = Math.floor((counter % 16) / 4);
+  square.position.x = (row * 64) - 10;
+  square.position.y = (col* 64) + 90;
+  
+  permSprites = [];
+  borderSprites = [];
+  for (var i = 0; i < numColumns; i++) {
+    
+      // Generate the perms texture
+      var sprite = new PIXI.Sprite(PIXI.Texture.Draw(function (canvas) {
+        // We are now in a 2D context. You need to specify your canvas
+        // width and height otherwise it'll have a size of 0x0 and
+        // you'll get an empty sprite
+        canvas.width = inputWidth;   
+        canvas.height = inputHeight;
+    
+        var ctx = canvas.getContext('2d');  //get  canvas 2D context
+        
+        ctx.fillStyle = "black";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        var pix = ctx.createImageData(canvas.width, canvas.height);
+        for (var y = 0; y < pix.data.length; y+=4) {
+            var val = sp._permanences[i][y/4]
+            pix.data[y] = 255   - val * 255;
+            pix.data[y+1] = 255 - val * 255;
+            pix.data[y+2] = 255 - val * 255;
+            pix.data[y+3] = 255;
+        };
+     
+        ctx.putImageData(pix, 0, 0);		
+      }));
+      permSprites.push(sprite);
+      
+      // Create the box that will contain the perms and a border
+      var box = new PIXI.DisplayObjectContainer();
+      
+      //console.log(activeArray[i]);
+      if (activeArray[i] > 0) {
+        borderBoxColor = "blue";
+      } else {
+        borderBoxColor = "black";
+      }
+      
+      // Creating the background for the box
+      var borderBox = new PIXI.Sprite(getTexture(borderBoxColor));
+      var borderWidth = 2;
+      borderBox.width = inputWidth + borderWidth * 2;
+      borderBox.height = inputHeight + borderWidth * 2;
+      borderSprites.push(borderBox);
+      box.addChild(borderBox);
+      
+      // Add in the perms texture layer
+      sprite.position.x = borderWidth;
+      sprite.position.y = borderWidth;
+      box.addChild(sprite);
+      
+      // Box placement on the stage
+      var scaling = 2;
+      var spacing = 2;
+      box.scale.x = scaling;
+      box.scale.y = scaling;
+      box.position.x = 400 + ((i % numColsX) * ((borderBox.width + spacing) * scaling));
+      box.position.y = 0 + (Math.floor(i / numColsX) * ((borderBox.height + spacing) * scaling));
+      
+      stage.addChild(box);
+  }
+  
+  /********************************************************************/
+  /* LAYER TWO
+   */
+  l2InputWidth = 4;
+  l2InputHeight = 6;
+  l2NumColsX = 1;
+  l2NumColsY = 5;
+  l2NumColumns = l2NumColsX * l2NumColsY;
+  l2sp = new SpatialPooler(inputDimensions = [l2InputWidth, l2InputHeight],
+                          columnDimensions = [l2NumColsX, l2NumColsY],
+                          potentialRadius = 6,
+                          potentialPct = 1,
+                          globalInhibition = true,
+                          localAreaDensity = -1.0,
+                          numActiveColumnsPerInhArea = 1,
+                          stimulusThreshold = 0,
+                          synPermInactiveDec = 0.005,
+                          synPermActiveInc = 0.015,
+                          synPermConnected = 0.60,
+                          minPctOverlapDutyCycle = 0.001,
+                          minPctActiveDutyCycle = 0.1,
+                          dutyCyclePeriod = 1000,
+                          maxBoost = 10.0,
+                          seed = -1,
+                          spVerbosity = 0,
+                          addNoise = false,
+                          wrapPotentialPools = false);
+      
+
+  l2ActiveArray = [];
+  for (var i = 0; i < l2sp._numColumns; i++) {
+    l2ActiveArray.push(0);
+  };
+  
+  l2PermSprites = [];
+  l2BorderSprites = [];
+  for (var i = 0; i < l2NumColumns; i++) {
+    
+      // Generate the perms texture
+      var sprite = new PIXI.Sprite(PIXI.Texture.Draw(function (canvas) {
+        // We are now in a 2D context. You need to specify your canvas
+        // width and height otherwise it'll have a size of 0x0 and
+        // you'll get an empty sprite
+        canvas.width = inputWidth;   
+        canvas.height = inputHeight;
+    
+        var ctx = canvas.getContext('2d');  //get  canvas 2D context
+        
+        ctx.fillStyle = "black";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        var pix = ctx.createImageData(canvas.width, canvas.height);
+        for (var y = 0; y < pix.data.length; y+=4) {
+            var val = l2sp._permanences[i][y/4]
+            pix.data[y] = 255   - val * 255;
+            pix.data[y+1] = 255 - val * 255;
+            pix.data[y+2] = 255 - val * 255;
+            pix.data[y+3] = 255;
+        };
+     
+        ctx.putImageData(pix, 0, 0);		
+      }));
+      
+      l2PermSprites.push(sprite);
+      
+      // Create the box that will contain the perms and a border
+      var l2box = new PIXI.DisplayObjectContainer();
+      
+      //console.log(activeArray[i]);
+      if (l2ActiveArray[i] > 0) {
+        l2BorderBoxColor = "blue";
+      } else {
+        l2BorderBoxColor = "black";
+      }
+      
+      // Creating the background for the l2box
+      var l2BorderBox = new PIXI.Sprite(getTexture(l2BorderBoxColor));
+      var l2BorderWidth = 1;
+      l2BorderBox.width = inputWidth + l2BorderWidth * 2;
+      l2BorderBox.height = inputHeight + l2BorderWidth * 2;
+      l2BorderSprites.push(l2BorderBox);
+      l2box.addChild(l2BorderBox);
+      
+      // Add in the perms texture layer
+      sprite.position.x = l2BorderWidth;
+      sprite.position.y = l2BorderWidth;
+      l2box.addChild(sprite);
+      
+      // Box placement on the stage
+      var l2Scaling = 2;
+      var l2Spacing = 2;
+      l2box.scale.x = l2Scaling;
+      l2box.scale.y = l2Scaling;
+      l2box.position.x = 800 + ((i % l2NumColsX) * ((l2BorderBox.width + l2Spacing) * l2Scaling));
+      l2box.position.y = 0 + (Math.floor(i / l2NumColsX) * ((l2BorderBox.height + l2Spacing) * l2Scaling));
+      
+      stage.addChild(l2box);
+  }
+  
+  maxIter = 5000
+  
+	function animate() {
+
+	    requestAnimFrame( animate );
+      
+      if (counter < maxIter) {
+        
+          // Run sp
+          // We have divided our large image into 16 patches so start over
+          // with the first patch ever 16 iterations
+          var input = imageSections[counter % 16];
+          //console.log(input);
+          var learn = true;
+          //if (counter > 100) {
+          //  learn = false;
+          //}
+          
+          if (counter < maxIter -1) {
+            
+            sp.compute(input, learn, activeArray);
+            //console.log("Active array after input:")
+            //console.log(activeArray);
+  
+            
+            /********************************************************************/
+            /* PERMANENCE DISPLAY BOXES
+             */
+            var row = (counter % 4)
+            var col = Math.floor((counter % 16) / 4);
+            square.position.x = (row * 64) - 10;
+            square.position.y = (col* 64) + 90;
+            
+            for (var i = 0; i < numColumns; i++) {
+              
+                // Update the perms texture
+                permSprites[i].setTexture(PIXI.Texture.Draw(function (canvas) {
+                    // We are now in a 2D context. You need to specify your canvas
+                    // width and height otherwise it'll have a size of 0x0 and
+                    // you'll get an empty sprite
+                    canvas.width = inputWidth;   
+                    canvas.height = inputHeight;
+                
+                    var ctx = canvas.getContext('2d');  //get  canvas 2D context
+                    
+                    ctx.fillStyle = "black";
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    
+                    var pix = ctx.createImageData(canvas.width, canvas.height);
+                    for (var y = 0; y < pix.data.length; y+=4) {
+                        var val = sp._permanences[i][y/4]
+                        pix.data[y] = 255   - val * 255;
+                        pix.data[y+1] = 255 - val * 255;
+                        pix.data[y+2] = 255 - val * 255;
+                        pix.data[y+3] = 255;
+                  };
+               
+                  ctx.putImageData(pix, 0, 0);		
+                }));
+                
+                //console.log(activeArray[i]);
+                if (activeArray[i] > 0) {
+                  borderBoxColor = "blue";
+                } else {
+                  borderBoxColor = "black";
+                }
+                
+                // Creating the background for the box
+                borderSprites[i].texture.destroy();
+                borderSprites[i].setTexture(getTexture(borderBoxColor));
+            }
+          }
+          
+          l2sp.compute([activeArray], learn, l2ActiveArray);
+          if (counter == 1000) {
+              console.log("L2 Input");
+              console.log(activeArray);
+              console.log("L2 Active array after input:")
+              console.log(l2ActiveArray);
+          }
+
+          
+          /********************************************************************
+           *LAYER 2
+           */
+          for (var i = 0; i < l2NumColumns; i++) {
+            
+              // Update the perms texture
+
+              l2PermSprites[i].setTexture(PIXI.Texture.Draw(function (canvas) {
+                  // We are now in a 2D context. You need to specify your canvas
+                  // width and height otherwise it'll have a size of 0x0 and
+                  // you'll get an empty sprite
+                  canvas.width = inputWidth;   
+                  canvas.height = inputHeight;
+              
+                  var ctx = canvas.getContext('2d');  //get  canvas 2D context
+                  
+                  ctx.fillStyle = "black";
+                  ctx.fillRect(0, 0, canvas.width, canvas.height);
+                  
+                  var pix = ctx.createImageData(canvas.width, canvas.height);
+                  var l1Cols = l2sp._connectedSynapses[i];
+                  for (var y = 0; y < pix.data.length; y+=4) {
+                      // Average over all connected columns
+                      var val = 0;
+                      for (var j = 0; j < l1Cols.length; j++) {
+                          // Use each connected col index to find lower
+                          // level synapse data
+                          val += sp._permanences[l1Cols[j]][y/4];
+                      }
+                      val = val / l1Cols.length;
+                      pix.data[y] = 255   - val * 255;
+                      pix.data[y+1] = 255 - val * 255;
+                      pix.data[y+2] = 255 - val * 255;
+                      pix.data[y+3] = 255;
+                };
+             
+                ctx.putImageData(pix, 0, 0);		
+              }));
+                  
+              //console.log(activeArray[i]);
+              if (l2ActiveArray[i] > 0) {
+                l2BorderBoxColor = "blue";
+              } else {
+                l2BorderBoxColor = "black";
+              }
+              
+              l2BorderSprites[i].texture.destroy();
+              l2BorderSprites[i].setTexture(getTexture(l2BorderBoxColor));
+          }
+
+      }
+      
+      counter++;
+      
+	    // Update our stats counter
+	    stats.update();
+	    
+	    // render the stage
+	    renderer.render(stage);
+	}
+
+	</script>
+
+	</body>
+</html>
