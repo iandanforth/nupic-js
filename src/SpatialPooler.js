@@ -477,17 +477,18 @@
 
         learn = typeof learn !== 'undefined' ? learn : true;
 
-        this._updateBookeepingVars(learn);
         // Convert to 1D array
         var oneDInputVector = nDto1D(inputVector, this._inputDimensions.length);
-        
         //console.log("1D version of input: ");
         //console.log(oneDInputVector);
         
         // Make sure our input is as defined during init
-        console.assert(oneDInputVector.length == this._numInputs,
-                       "Input does not match specified input dimensions");
-        //console.log(oneDInputVector);
+        if (oneDInputVector.length != this._numInputs) {
+            console.assert(false, "Input does not match specified input dimensions");
+            return;
+        }
+        
+        this._updateBookeepingVars(learn);
         
         var overlaps = this._calculateOverlap(oneDInputVector);
         
@@ -513,7 +514,7 @@
         // Store this as an accessible property
         this.boostedOverlaps = boostedOverlaps
         
-        //if (this._numColumns == 5) {
+        //if (this._numColumns == 10) {
         //    console.log("Boosted overlaps: ");
         //    console.log(this.boostedOverlaps);
         //}
@@ -566,7 +567,7 @@
             activeArray[activeColumns[i]] = this.boostedOverlaps[activeColumns[i]];
         }
         
-        //if (this._numColumns == 5) {
+        //if (this._numColumns == 10) {
         //    console.log("Final Active array");
         //    console.log(activeArray);
         //}
@@ -1090,12 +1091,12 @@
         //console.log("Connected synapses for this column (in update): ");
         //console.log(newConnected);
         
-        if (index == 0) {
-          //console.log("Old Connected:");
-          //console.log(this._connectedSynapses[index]);
-          //console.log("New Connected:");
-          //console.log(newConnected);
-        };
+        //if (this._numColumns == 10 && index == 0) {
+        //  console.log("Old Connected:");
+        //  console.log(this._connectedSynapses[index]);
+        //  console.log("New Connected:");
+        //  console.log(newConnected);
+        //};
         
         this._permanences[index] = perm;
         this._connectedSynapses[index] = newConnected;
@@ -1584,7 +1585,6 @@
                                                     this._columnDimensions)) {
             return this._inhibitColumnsGlobal(overlapsCopy, density);
         } else {
-            // TODO implement this path
             return this._inhibitColumnsLocal(overlapsCopy, density);
         };
     };
