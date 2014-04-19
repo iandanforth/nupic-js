@@ -1,0 +1,50 @@
+
+<!DOCTYPE HTML>
+<html>
+    <head>
+	    <title>Temporal Pooler Test</title>
+	    <style>
+		    body {
+			    margin: 0;
+			    padding: 0;
+			    background-color: #000000;
+		    }
+	    </style>
+      <script src="../src/simplesets.js"></script>
+	    <script src="../src/seedrandom.min.js"></script>
+	    <script src="../src/TemporalPooler.js"></script>
+
+
+    </head>
+    <body>
+	
+	<div id="container"></div>
+	
+	<script>
+        var inputWidth = 8;
+        var inputHeight = 8;
+        var numInputs = inputWidth * inputHeight;
+        var cellsPerColumn = 3;
+        var tp = new TemporalPooler(numInputs,
+                                    cellsPerColumn);
+        
+        tpInput = [];
+        for (var i = 0; i < numInputs; i++) {
+            if (i <= (numInputs / 2)) {
+                var val = 0;
+            } else {
+                var val = 1;
+            }
+            tpInput.push(val);
+        }
+        console.log(tpInput);
+        var tpOutput = tp.compute(tpInput, true, true);
+        console.log("TP OUTPUT");
+        console.log(tpOutput);
+        
+        var seg = new Segment(tp, false);
+	    
+	</script>
+	
+	</body>
+</html>
