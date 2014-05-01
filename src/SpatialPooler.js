@@ -471,6 +471,12 @@
                         everywhere else.
         */
 
+        if (typeof inputVector === 'undefined' || typeof activeArray === 'undefined') {
+          return;
+        }
+
+        learn = typeof learn !== 'undefined' ? learn : true;
+
         this._updateBookeepingVars(learn);
         // Convert to 1D array
         var oneDInputVector = nDto1D(inputVector, this._inputDimensions.length);
