@@ -49,12 +49,13 @@ function genImageTextureAndPatches( imageSource,
                           r++;
                           redArray.push([]);
                         };
-                        if (pix[k] < 100) {
+                        if (pix[k] > 100) {
                           redArray[r].push(0);
                         } else {
                           redArray[r].push((pix[k]) / 255);
                         };
                     };
+                    //console.log(redArray);
                     patchContainer.push(redArray);
                 };
               };

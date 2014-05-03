@@ -1,0 +1,551 @@
+
+<!DOCTYPE HTML>
+<html>
+<head>
+	<title>Spatial Pooler - Demo</title>
+	<style>
+		body {
+			margin: 0;
+			padding: 0;
+			background-color: #000000;
+		}
+	</style>
+	<script src="../src/pixi.dev.js"></script>
+  <script src="../src/Stats.js"></script>
+  <script src="../src/simplesets.js"></script>
+  <script src="../src/seedrandom.min.js"></script>
+  <script src="../src/SpatialPooler.js"></script>
+
+</head>
+<body>
+    
+	<div id="container"></div>
+  <canvas id="myCanvas" width="128" height="128"></canvas>
+
+	<script>
+  /**************************************************************************/
+  /* Helper functions
+   */
+  
+  var colorTextures = {};
+  function getTexture(color) {
+    if(colorTextures[color] === undefined) {
+      var canvas = document.createElement('canvas')
+      canvas.width = 1;
+      canvas.height = 1;
+      ctx = canvas.getContext('2d');
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.rect(0,0,1,1);
+      ctx.fill();
+      ctx.closePath();
+      colorTextures[color] = PIXI.Texture.fromCanvas(canvas);
+    }
+    return colorTextures[color];
+  };
+  
+  
+  // Update PIXI to get canvas features
+  // http://www.html5gamedevs.com/topic/518-hack-making-all-2d-drawing-functions-available-to-pixi/
+  PIXI.Texture.Draw = function (cb) {
+            var canvas = document.createElement('canvas');
+            if (typeof cb == 'function') cb(canvas);
+            return PIXI.Texture.fromCanvas(canvas);
+  }
+
+	// Common global variables
+	var stats;
+	
+	// DOM
+	var container = document.getElementById( 'container' );
+
+	// create an new instance of a pixi stage
+	var stage = new PIXI.Stage(0XFFFFFF);
+
+	// create a renderer instance
+  console.log(window.innerHeight);
+	var renderer = new PIXI.CanvasRenderer(window.innerWidth, window.innerHeight);
+	
+	// Update if the browser window is resized
+	window.addEventListener( 'resize', onWindowResize, false );
+	
+	function onWindowResize() {
+
+	    renderer.resize( window.innerWidth, window.innerHeight );
+
+	}
+
+	// Add the renderer view element to the DOM
+	container.appendChild(renderer.view);
+
+	// STATS
+	stats = new Stats();
+	stats.domElement.style.position = 'absolute';
+	stats.domElement.style.bottom = '0px';
+	stats.domElement.style.zIndex = 100;
+	container.appendChild( stats.domElement );
+	
+	requestAnimFrame( animate );
+  
+  
+  // Our total frame counter
+  counter = 0;
+  
+  /**************************************************************************/
+  /* IMAGE AND IMAGE PATCH EXTRACTION
+   */
+	
+  // Create a sprite from the image
+  imageSections = [];
+  var sprite = new PIXI.Sprite(PIXI.Texture.Draw(function (canvas) {
+      // We are now in a 2D context 
+      canvas.width = 128;   
+      canvas.height = 128;
+      
+      // Get canvas 2D context
+      var context = canvas.getContext('2d');  
+      
+      // Create a new image object.
+      var img = new Image();
+    
+      // Define an on load handler for this image
+      img.addEventListener('load', function () {
+        
+        // Where the image should be put on the canvas
+        var x = 0, y = 0;
+        
+        // How large our image sections will be
+        var sectionWidth = sectionHeight = 32;
+    
+        // Draw the image on canvas.
+        context.drawImage(this, x, y);
+        
+        // Extract and store image sections from canvas
+        for (var i = 0; i < 4 * sectionHeight; i += sectionHeight) {
+            for (var j = 0; j < 4 * sectionWidth; j += sectionWidth) {
+              // Get the pixel data for this section
+              var imgd = context.getImageData(j, i, sectionWidth, sectionHeight);
+              var pix = imgd.data;
+              var redArray = [];
+              var r = -1;
+              // Now we have an array of length sectionWidth*sectionHeight*4
+              // Break that up into rows for later reconstruction
+              for (var k = 0; k < pix.length; k += 4) {
+                  // Every 32 pixels we want a new row
+                  if ((k % (sectionWidth * 4)) == 0){
+                    r++;
+                    redArray.push([]);
+                  }
+                  if (pix[k] > 100) {
+                    redArray[r].push(0);
+                  } else {
+                    redArray[r].push((255 - pix[k]) / 255); // red
+                  }
+              }
+              imageSections.push(redArray);
+            }
+        }
+      }, false);
+    
+      // Load the image
+      img.src = 'images/Image2.jpg';
+  }));
+
+  
+  
+  var borderedInputImage = createBorderedSprite(sprite, 2);
+  
+  var inputImageXOffset = 0;
+  var inputImageYOffset = 200;
+  borderedInputImage.scale.x = 2;
+  borderedInputImage.scale.y = 2;
+  console.log(borderedInputImage);
+  borderedInputImage.position.y = inputImageYOffset;
+  
+	stage.addChild(borderedInputImage);
+
+
+  /**************************************************************************/
+  /* IMAGE PATCH BOUNDING BOX
+   */
+  
+  // Create the image section bounding box
+  var graphics = new PIXI.Graphics();
+  graphics.lineStyle(2, 0x0000FF, 1);
+  graphics.drawRect(0, 0, 64, 64);
+  squareT = graphics.generateTexture();
+  square = new PIXI.Sprite(squareT);
+  square.position.x = inputImageXOffset -10;
+  square.position.y = inputImageYOffset - 10;
+
+  stage.addChild(square);
+  
+  /**************************************************************************/
+  /* SPATIAL POOLER SETUP
+   */
+  
+  inputWidth = 32;
+  inputHeight = 32;
+  numColsX = 1;
+  numColsY = 5;
+  numColumns = numColsX * numColsY;
+  sp = new SpatialPooler(inputDimensions = [inputWidth, inputHeight],
+                          columnDimensions = [numColsX, numColsY],
+                          potentialRadius = inputWidth,
+                          potentialPct = 1,
+                          globalInhibition = true,
+                          localAreaDensity = -1.0,
+                          numActiveColumnsPerInhArea = 1,
+                          stimulusThreshold = 0,
+                          synPermInactiveDec = 0.005,
+                          synPermActiveInc = 0.015,
+                          synPermConnected = 0.60,
+                          minPctOverlapDutyCycle = 0.001,
+                          minPctActiveDutyCycle = 0.1,
+                          dutyCyclePeriod = 1000,
+                          maxBoost = 1.0,
+                          seed = -1,
+                          spVerbosity = 0,
+                          addNoise = false,
+                          wrapPotentialPools = false);
+      
+
+  activeArray = [];
+  for (var i = 0; i < sp._numColumns; i++) {
+    activeArray.push(0);
+  }
+  
+  /********************************************************************/
+  /* PERMANENCE DISPLAY BOXES
+   */
+  var row = (counter % 4)
+  var col = Math.floor((counter % 16) / 4);
+  square.position.x = (row * 64) - 10;
+  square.position.y = (col* 64) + 90;
+  
+  permSprites = [];
+  borderSprites = [];
+  for (var i = 0; i < numColumns; i++) {
+    
+      // Generate the perms texture
+      var sprite = new PIXI.Sprite(PIXI.Texture.Draw(function (canvas) {
+        // We are now in a 2D context. You need to specify your canvas
+        // width and height otherwise it'll have a size of 0x0 and
+        // you'll get an empty sprite
+        canvas.width = inputWidth;   
+        canvas.height = inputHeight;
+    
+        var ctx = canvas.getContext('2d');  //get  canvas 2D context
+        
+        ctx.fillStyle = "black";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        var pix = ctx.createImageData(canvas.width, canvas.height);
+        for (var y = 0; y < pix.data.length; y+=4) {
+            var val = sp._permanences[i][y/4]
+            pix.data[y] = 255   - val * 255;
+            pix.data[y+1] = 255 - val * 255;
+            pix.data[y+2] = 255 - val * 255;
+            pix.data[y+3] = 255;
+        };
+     
+        ctx.putImageData(pix, 0, 0);		
+      }));
+      sprite.texture.scaleMode = PIXI.scaleModes.NEAREST;
+      permSprites.push(sprite);
+      
+      // Create the box that will contain the perms and a border
+      var box = new PIXI.DisplayObjectContainer();
+      
+      //console.log(activeArray[i]);
+      if (activeArray[i] > 0) {
+        borderBoxColor = "blue";
+      } else {
+        borderBoxColor = "black";
+      }
+      
+      // Creating the background for the box
+      var borderBox = new PIXI.Sprite(getTexture(borderBoxColor));
+      var borderWidth = 2;
+      borderBox.width = inputWidth + borderWidth * 2;
+      borderBox.height = inputHeight + borderWidth * 2;
+      borderSprites.push(borderBox);
+      box.addChild(borderBox);
+      
+      // Add in the perms texture layer
+      sprite.position.x = borderWidth;
+      sprite.position.y = borderWidth;
+      box.addChild(sprite);
+      
+      // Box placement on the stage
+      var scaling = 2;
+      var spacing = 2;
+      box.scale.x = scaling;
+      box.scale.y = scaling;
+      box.position.x = 350 + ((i % numColsX) * ((borderBox.width + spacing) * scaling));
+      box.position.y = 150 + (Math.floor(i / numColsX) * ((borderBox.height + spacing) * scaling));
+      
+      stage.addChild(box);
+  }
+  
+  /********************************************************************/
+  /* FEATURE MAPS
+   */
+  var row = (counter % 4)
+  var col = Math.floor((counter % 16) / 4);
+  square.position.x = (row * 64) - 10;
+  square.position.y = (col* 64) + 90;
+  
+  featureMaps = [];
+  for (var i = 0; i < numColumns; i++) {
+      featureMaps.push([]);
+  };
+  
+  fmWidth  = 128;
+  fmHeight = 128;
+  
+  featureSprites = [];
+  for (var i = 0; i < numColumns; i++) {
+    
+      // Generate the feature map texture
+      var sprite = new PIXI.Sprite(PIXI.Texture.Draw(function (canvas) {
+        // We are now in a 2D context. You need to specify your canvas
+        // width and height otherwise it'll have a size of 0x0 and
+        // you'll get an empty sprite
+        canvas.width = fmWidth;   
+        canvas.height = fmHeight;
+    
+        var ctx = canvas.getContext('2d');  //get  canvas 2D context
+        
+        ctx.fillStyle = "black";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        for (var j = 0; j < featureMaps[i].length; j++) {
+          if (featureMaps[i][j] > 0) {
+            // draw perms of this column in this slot
+            var pix = ctx.createImageData(inputWidth, inputHeight);
+            for (var y = 0; y < pix.data.length; y+=4) {
+                var val = sp._permanences[i][y/4]
+                pix.data[y] = 255   - val * 255;
+                pix.data[y+1] = 255 - val * 255;
+                pix.data[y+2] = 255 - val * 255;
+                pix.data[y+3] = 255;
+            };
+          } else {
+            // draw a blank white square
+            var pix = ctx.createImageData(inputWidth, inputHeight);
+            for (var y = 0; y < pix.data.length; y+=4) {
+                var val = 0;
+                pix.data[y] = 255   - val * 255;
+                pix.data[y+1] = 255 - val * 255;
+                pix.data[y+2] = 255 - val * 255;
+                pix.data[y+3] = 255;
+            }
+          }
+          var spacing = 0;
+          var scaling = 1;
+          var targetX = 0 + ((j % 4) * ((inputWidth + spacing) * scaling));
+          var targetY = 0 + (Math.floor(j / 4) * ((inputHeight + spacing) * scaling));
+          ctx.putImageData(pix, targetX, targetY);
+        }	
+      }));
+      // Set scale mode to not blend
+      sprite.texture.scaleMode = PIXI.scaleModes.NEAREST;
+      featureSprites.push(sprite);
+      
+      // Create the box that will contain the perms and a border
+      var box = new PIXI.DisplayObjectContainer();
+      
+
+      borderBoxColor = "black";
+      
+      // Creating the background for the box
+      var borderBox = new PIXI.Sprite(getTexture(borderBoxColor));
+      var borderWidth = 1;
+      borderBox.width = fmWidth + borderWidth * 2;
+      borderBox.height = fmHeight + borderWidth * 2;
+      box.addChild(borderBox);
+      
+      // Add in the perms texture layer
+      sprite.position.x = borderWidth;
+      sprite.position.y = borderWidth;
+      box.addChild(sprite);
+      
+      // Box placement on the stage
+      var scaling = 1;
+      var spacing = 2;
+      box.scale.x = scaling;
+      box.scale.y = scaling;
+      box.position.x = 500 + ((i % numColsX) * ((borderBox.width + spacing) * scaling));
+      box.position.y = 0 + (Math.floor(i / numColsX) * ((borderBox.height + spacing) * scaling));
+      
+      stage.addChild(box);
+  }
+  
+
+	function animate() {
+
+	    requestAnimFrame( animate );
+      
+      if (counter < 10000 && counter > 0) {
+        
+          // Run sp
+          // We have divided our large image into 16 patches so start over
+          // with the first patch ever 16 iterations
+          var input = imageSections[counter % 16];
+          //console.log(input);
+          var learn = true;
+          //if (counter > 100) {
+          //  learn = false;
+          //}
+          sp.compute(input, learn, activeArray);
+          //console.log("Active array after input:")
+          //console.log(activeArray);
+          
+          /********************************************************************/
+          /* PERMANENCE DISPLAY BOXES
+           */
+          var row = (counter % 4)
+          var col = Math.floor((counter % 16) / 4);
+          square.position.x = (row * 64) + (inputImageXOffset - 10);
+          square.position.y = (col* 64) + (inputImageYOffset -10);
+          
+          for (var i = 0; i < numColumns; i++) {
+            
+              // Update the perms texture
+              permSprites[i].setTexture(PIXI.Texture.Draw(function (canvas) {
+                  // We are now in a 2D context. You need to specify your canvas
+                  // width and height otherwise it'll have a size of 0x0 and
+                  // you'll get an empty sprite
+                  canvas.width = inputWidth;   
+                  canvas.height = inputHeight;
+              
+                  var ctx = canvas.getContext('2d');  //get  canvas 2D context
+                  
+                  ctx.fillStyle = "black";
+                  ctx.fillRect(0, 0, canvas.width, canvas.height);
+                  
+                  var pix = ctx.createImageData(canvas.width, canvas.height);
+                  for (var y = 0; y < pix.data.length; y+=4) {
+                      var val = sp._permanences[i][y/4]
+                      pix.data[y] = 255   - val * 255;
+                      pix.data[y+1] = 255 - val * 255;
+                      pix.data[y+2] = 255 - val * 255;
+                      pix.data[y+3] = 255;
+                };
+             
+                ctx.putImageData(pix, 0, 0);		
+              }));
+              
+              //console.log(activeArray[i]);
+              if (activeArray[i] > 0) {
+                borderBoxColor = "blue";
+              } else {
+                borderBoxColor = "black";
+              }
+              
+              // Creating the background for the box
+              borderSprites[i].texture.destroy();
+              borderSprites[i].setTexture(getTexture(borderBoxColor));
+          }
+          
+          
+          /********************************************************************/
+          /* FEATURE MAPS
+           */
+          if (counter % 16 == 0) {
+  
+              // Update textures from feature map arrays
+              for (var i = 0; i < numColumns; i++) {
+                  featureSprites[i].texture.destroy();
+                  featureSprites[i].setTexture(PIXI.Texture.Draw(function (canvas) {
+                    // We are now in a 2D context. You need to specify your canvas
+                    // width and height otherwise it'll have a size of 0x0 and
+                    // you'll get an empty sprite
+                    canvas.width = fmWidth;   
+                    canvas.height = fmHeight;
+                
+                    var ctx = canvas.getContext('2d');  //get  canvas 2D context
+                    
+                    ctx.fillStyle = "black";
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    
+                    for (var j = 0; j < featureMaps[i].length; j++) {
+                      if (featureMaps[i][j] > 0) {
+                        // draw perms of this column in this slot
+                        var pix = ctx.createImageData(inputWidth, inputHeight);
+                        for (var y = 0; y < pix.data.length; y+=4) {
+                            var val = sp._permanences[i][y/4]
+                            pix.data[y] = 255   - val * 255;
+                            pix.data[y+1] = 255 - val * 255;
+                            pix.data[y+2] = 255 - val * 255;
+                            pix.data[y+3] = 255;
+                        };
+                      } else {
+                        // draw a blank white square
+                        var pix = ctx.createImageData(inputWidth, inputHeight);
+                        for (var y = 0; y < pix.data.length; y+=4) {
+                            var val = 0;
+                            pix.data[y] = 255   - val * 255;
+                            pix.data[y+1] = 255 - val * 255;
+                            pix.data[y+2] = 255 - val * 255;
+                            pix.data[y+3] = 255;
+                        }
+                      }
+                      var spacing = 0;
+                      var scaling = 1;
+                      var targetX = 0 + ((j % 4) * ((inputWidth + spacing) * scaling));
+                      var targetY = 0 + (Math.floor(j / 4) * ((inputHeight + spacing) * scaling));
+                      ctx.putImageData(pix, targetX, targetY);
+                    }	
+                  }));
+              }
+          
+               // Clear out feature maps every pass through the image
+              for (var i = 0; i < featureMaps.length; i++) {
+                    featureMaps[i] = [];
+              }
+          }
+          
+          // Add new data to feature maps
+          for (var i = 0; i < activeArray.length; i++) {
+              featureMaps[i].push(activeArray[i])
+          };
+          
+          
+      };
+      
+      counter++;
+      
+	    // Update our stats counter
+	    stats.update();
+	    
+	    // render the stage
+	    renderer.render(stage);
+	}
+  
+  function createBorderedSprite(imageSprite, borderWidth) {
+      
+      var box = new PIXI.DisplayObjectContainer();
+      
+      // TODO - Make this a param
+      var borderBoxColor = "black";
+      
+      // Creating the background for the box
+      var borderBox = new PIXI.Sprite(getTexture(borderBoxColor));
+      borderBox.width = imageSprite.width + borderWidth * 2;
+      borderBox.height = imageSprite.height + borderWidth * 2;
+      box.addChild(borderBox);
+      
+      // Add in the image texture layer
+      imageSprite.position.x = borderWidth;
+      imageSprite.position.y = borderWidth;
+      box.addChild(sprite);
+      
+      return box;
+  }
+
+	</script>
+
+	</body>
+</html>
