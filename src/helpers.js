@@ -1,7 +1,11 @@
-function extractMNIST() {
-    /*
-     * Populates image and patch containers with extracted sprites
-     */ 
+function arrayMean(arr) {
+    // Returns the sum of an array of numbers
+    var sum = 0;
+    for(var i = 0; i < arr.length; i++){
+        sum += arr[i];
+    };
+    
+    return sum / arr.length;
 }
 
 function genImageTextureAndPatches( imageSource,
@@ -49,10 +53,18 @@ function genImageTextureAndPatches( imageSource,
                           r++;
                           redArray.push([]);
                         };
-                        if (pix[k] > 100) {
-                          redArray[r].push(0);
+                        if (invert === true) {
+                            if (pix[k] < 100) {
+                                redArray[r].push(0);
+                            } else {
+                                redArray[r].push((pix[k]) / 255);
+                            };
                         } else {
-                          redArray[r].push((pix[k]) / 255);
+                            if (pix[k] > 100) {
+                                redArray[r].push(0);
+                            } else {
+                                redArray[r].push((pix[k]) / 255);
+                            };
                         };
                     };
                     //console.log(redArray);
