@@ -1709,9 +1709,11 @@
         wrapAround = defaultFor(wrapAround, false);
         console.assert(dimensions.length > 0);
         
-        var columnCoords = this._indexToCoords(columnIndex,
-                                               this._columnDimensions,
-                                               this._columnDimCompCounts);
+        // var columnCoords = this._indexToCoords(columnIndex,
+        //                                        this._columnDimensions,
+        //                                        this._columnDimCompCounts);
+
+        var columnCoords = oneDtoNDCoord(columnIndex, dimensions); 
         //console.log("==============================");
         //console.log("Column Index");
         //console.log(columnIndex);
@@ -1720,19 +1722,21 @@
         //console.log("Radius in getNeighborsND ");
         //console.log(radius);
         var rangeND = [];
-        for (var i = 0; i < this._columnDimensions.length; i++) {
+        // for (var i = 0; i < this._columnDimensions.length; i++) {
+        for (var i = 0; i < dimensions.length; i++) {
             var curRange = [];
             if (wrapAround == true) {
                 console.log("Wrapping!");
                 for (var j = columnCoords[i] - radius; j < columnCoords[i] + radius + 1; j++){
-                    var val = j % this._columnDimensions[i];
+                    // var val = j % this._columnDimensions[i];
+                    var val = j % dimensions[i]
                     curRange.push[val];
                 };
             } else {
                 //console.log("No wrap!");
                 for (var j = columnCoords[i] - radius; j < columnCoords[i] + radius + 1; j++){
                     //console.log(j);
-                    if (j >= 0 && j < this._columnDimensions[i]) {
+                    if (j >= 0 && j < dimensions[i]) {
                         curRange.push(j);
                     };
                 };
@@ -1751,9 +1755,10 @@
         for (var i = 0; i < carProd.length; i++) {
             //console.log(carProd[i]);
             //console.log(this._columnDimCompCounts);
-            var ind = this._coordsToIndex(carProd[i],
-                                          this._columnDimensions,
-                                          this._columnDimCompCounts);
+            // var ind = this._coordsToIndex(carProd[i],
+            //                               this._columnDimensions,
+            //                               this._columnDimCompCounts);
+            var ind = nDto1DCoord(carProd[i], dimensions); 
             //console.log(ind);
             neighbors.push(ind);
         }
