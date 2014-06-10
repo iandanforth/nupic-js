@@ -1237,9 +1237,9 @@
                       and connectivity matrices.
       */
       // console.log("columnCoords"); 
-      columnCoord = this._indexToCoords(index, this._columnDimensions, this._columnDimCompCounts); 
+      // columnCoord = this._indexToCoords(index, this._columnDimensions, this._columnDimCompCounts); 
       // console.log(columnCoord); 
-      // columnCoord = oneDtoNDCoord(index, this._columnDimensions); 
+      columnCoord = oneDtoNDCoord(index, this._columnDimensions); 
       // console.log("oneDtoNDCoord(index, this._columnDimensions); " + columnCoord); 
 
       ratios = new Array(columnCoord.length); 
@@ -1255,8 +1255,8 @@
       }
       // console.log("inputCoord " + inputCoord); 
 
-      return this._coordsToIndex(inputCoord, this._inputDimensions, this._inputDimCompCounts); 
-      // return nDto1DCoord(inputCoord, this._inputDimensions); 
+      // return this._coordsToIndex(inputCoord, this._inputDimensions, this._inputDimCompCounts); 
+      return nDto1DCoord(inputCoord, this._inputDimensions); 
 
     }
 
