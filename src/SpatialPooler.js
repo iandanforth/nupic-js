@@ -61,6 +61,45 @@
         return typeof arg !== 'undefined' ? arg : val;
     }
 
+    //http://stackoverflow.com/a/11317776/3121350
+    function oneDtoNDCoord(index, dims){
+      //input = index.  //output = arrayofCorrds. 
+      if(index > arrayProduct(dims) || index < 0){
+        console.log("index Out of bounds"); 
+        return null
+      }
+
+      coordArray = new Array(dims.length); 
+      quotientArray = new Array(dims.length); 
+
+      coordArray[dims.length-1] = index % dims[dims.length-1];
+      quotientArray[dims.length-1] = Math.floor(index / dims[dims.length-1]); 
+
+
+      for(var i = dims.length-2; i>=0; i--){
+        coordArray[i] = quotientArray[i+1] % dims[i]; 
+        quotientArray[i] = Math.floor(quotientArray[i+1] / dims[i]); 
+      }
+      return coordArray; 
+    }
+
+    function nDto1DCoord(coord, dims){
+      if(coord.length != dims.length){
+        console.log("coord=" + coord); 
+        console.log("dims=" + dims); 
+        console.log("Error: dimensions must match"); 
+        return null; 
+      }
+
+      var sum = 0; 
+      var tempProd = 1; 
+      for(var i = dims.length-1; i>=0; i--){
+        sum += tempProd * coord[i]; 
+        tempProd *= dims[i]; 
+      }
+      return sum; 
+    }
+
     function nDto1D(mat, dimCount) {
         // Returns a 1 dimensional array extracted from mat based on dimCount
         // Within a dimension all arrays must be of equal length.
@@ -478,13 +517,17 @@
         learn = typeof learn !== 'undefined' ? learn : true;
 
         // Convert to 1D array
+        debugger; 
         var oneDInputVector = nDto1D(inputVector, this._inputDimensions.length);
+
         //console.log("1D version of input: ");
         //console.log(oneDInputVector);
         
         // Make sure our input is as defined during init
         if (oneDInputVector.length != this._numInputs) {
             console.assert(false, "Input does not match specified input dimensions");
+            console.log("oneDInputVector" + oneDInputVector); 
+            console.log("this._numInputs" + this._numInputs); 
             return;
         }
         
@@ -1173,6 +1216,50 @@
         return permanences
     };
 
+    SpatialPooler.prototype._mapColumn = function(index){
+      /*
+      Maps a column to its respective input index, keeping to the topology of
+      the region. It takes the index of the column as an argument and determines
+      what is the index of the flattened input vector that is to be the center of
+      the column's potential pool. It distributes the columns over the inputs
+      uniformly. The return value is an integer representing the index of the
+      input bit. Examples of the expected output of this method:
+      * If the topology is one dimensional, and the column index is 0, this
+        method will return the input index 0. If the column index is 1, and there
+        are 3 columns over 7 inputs, this method will return the input index 3.
+      * If the topology is two dimensional, with column dimensions [3, 5] and
+        input dimensions [7, 11], and the column index is 3, the method
+        returns input index 8.
+
+      Parameters:
+      ----------------------------
+      index:          The index identifying a column in the permanence, potential
+                      and connectivity matrices.
+      */
+      // console.log("columnCoords"); 
+      // columnCoord = this._indexToCoords(index, this._columnDimensions, this._columnDimCompCounts); 
+      // console.log(columnCoord); 
+      columnCoord = oneDtoNDCoord(index, this._columnDimensions); 
+      // console.log("oneDtoNDCoord(index, this._columnDimensions); " + columnCoord); 
+
+      ratios = new Array(columnCoord.length); 
+      for(var i = 0; i< ratios.length; i++){
+        // debugger; 
+        ratios[i] = columnCoord[i] / Math.max(this._columnDimensions[i]-1, 1); 
+      }
+      // console.log("ratios " + ratios)
+
+      inputCoord = new Array(this._inputDimensions.length); 
+      for(var i = 0; i< inputCoord.length; i++){
+        inputCoord[i] = Math.floor(     (this._inputDimensions[i] - 1)*ratios[i]     ); 
+      }
+      // console.log("inputCoord " + inputCoord); 
+
+      // return this._coordsToIndex(inputCoord, this._inputDimensions, this._inputDimCompCounts); 
+      return nDto1DCoord(inputCoord, this._inputDimensions); 
+
+    }
+
     SpatialPooler.prototype._mapPotential = function(index, wrapAround){
         /*
         Maps a column to its input bits. This method encapsultes the topology of 
@@ -1207,141 +1294,14 @@
         wrapAround:     A boolean value indicating that boundaries should be 
                         region boundaries ignored.
         */
+        index = this._mapColumn(index); 
+        console.log("this._mapColumn(index) " + index); 
+        indices = this._getNeighborsND(index, this._inputDimensions, this._potentialRadius, wrapAround); 
+        indices.push(index); 
+        console.log("getNeighborsND(index) " + indices); 
         
-        var indices = [];
-        var diameter = 2 * (this._potentialRadius) + 1
-        
-        // If we are doing 2D topology
-        if (this._inputDimensions.length == 2) {
-            
-            //console.log("2D INPUT")
-            
-            // If we have less columns than inputs ...
-            if (this._numColumns < this._numInputs) {
-                
-                //console.log(this._columnDimensions);
-                
-                // Calculate how to ~ evenly distribute our columns in input space
-                var xShift = (this._inputDimensions[0] - this._columnDimensions[0]) / (1 + this._columnDimensions[0]);
-                //console.log("Avg xShift: " + xShift);
-                var yShift = (this._inputDimensions[1] - this._columnDimensions[1]) / (1 + this._columnDimensions[1]);
-                //console.log("Avg yShift: " + yShift);
-                
-                // Calculate our column coordinates in column space
-                var coordInColSpace = this._indexToCoords(index,
-                                                        this._columnDimensions,
-                                                        this._columnDimCompCounts)
-                
-                //console.log("Index:");
-                //console.log(index);
-                //console.log("Coordinates in column space");
-                //console.log(coordInColSpace);
-                
-                // Apply the shift in column space
-                var colXNum = coordInColSpace[0] + 1;
-                var xShift = Math.floor(colXNum * xShift);
-                var colYNum = coordInColSpace[1] + 1;
-                var yShift = Math.floor(colYNum * yShift);      
-                coordInColSpace[0] += xShift;
-                coordInColSpace[1] += yShift;
-                
-                // Shift back to input space
-                index = this._coordsToIndex(coordInColSpace,
-                                            this._inputDimensions,
-                                            this._inputDimCompCounts);
-            };
-            
-            var coords = this._indexToCoords(index,
-                                             this._inputDimensions,
-                                             this._inputDimCompCounts)
-            
-            // Create a square area to make it easy
-            // Use pythagorean theorem to find the area of a square with diagonal of
-            // len diameter.
-            var arrayLen = Math.pow(diameter, 2)
-            
-            // Find the top right corner of the area
-            var minCoords = [];
-            for (var i = 0; i < this._inputDimensions.length; i++) {
-                minCoords.push(coords[i] - this._potentialRadius);
-            };
-            
-            // Iterate through all the indices in the area, wrapping if neccessary
-            for (var i = 0; i < diameter; i++) {
-                for (var j = 0; j < diameter; j++) {
-                    x = (minCoords[0] + j);
-                    y = (minCoords[1] + i);
-                    if (wrapAround === true) {
-                        x = x.mod(this._inputDimensions[0]);
-                        y = y.mod(this._inputDimensions[1]);
-                    } else {
-                        if (y < 0 || y > this._inputDimensions[1] - 1) {
-                            continue;
-                        }
-                        if (x < 0 || x > this._inputDimensions[0] - 1) {
-                            continue;
-                        }
-                    }
-                    var areaCoords = [x, y];
-                    indices.push(this._coordsToIndex(areaCoords,
-                                                     this._inputDimensions,
-                                                     this._inputDimCompCounts));
-                };
-            };
-            
-        } else {
-            
-            //console.log("ONE D INPUT");
-            // Handle the case where we only have a few columns to cover the input
-            // NOTE: This is a divergence from the cpp/py implementation
-            //if (this._numColumns < this._numInputs) {
-            //    var shift = (this._numInputs - this._numColumns) / (1 + this._numColumns);
-            //    var colNum = index + 1;
-            //    var shift = Math.floor(colNum * shift);
-            //    console.log("Shift needed: ");
-            //    console.log(shift);
-            //    index += shift;
-            //};
-            
-            // Fill it with the first indices i.e. 0, 1, 2, 3 etc.
-            //console.log("Diameter")
-            //console.log(diameter);
-            for (var i = 0; i < diameter; i++) {
-                indices.push(i);
-            };
-            //console.log("Indices");
-            //console.log(indices);
-            // Shift over so index 0 of that array is the value of the column index
-            // e.g. Column index 1000 - 1000, 1001, 1002 etc.
-            for (var i = 0; i < diameter; i++) {
-                indices[i] += index;
-            };
-            
-            //console.log("Moved indices");
-            //console.log(indices);
-            // Shift back so the column index is centered
-            for (var i = 0; i < diameter; i++) {
-                indices[i] -= this._potentialRadius;
-            };
-            // We may want column receptive fields to wrap
-            if (wrapAround === true) {
-                for (var i = 0; i < diameter; i++) {
-                  indices[i] = indices[i].mod(this._numInputs);
-                };
-            } else {
-                // Otherwise remove indices that are outside the range of the input
-                var cleanedIndices = [];
-                for (var i = 0; i < diameter; i++) {
-                  if (indices[i] >= 0 && indices[i] < this._numInputs) {
-                    cleanedIndices.push(indices[i]);
-                  }
-                };
-                indices = cleanedIndices;
-            };
-        };
         // Remove duplicate indices
         indices = new Set(indices).array();
-        //console.log(indices);
         
         // Select a subset of the receptive field to serve as the potential pool
         // Because we are seeding the random number generator these selections
@@ -1352,10 +1312,14 @@
         };
         // Shuffle our indices and then take the first n
         shflIndices = shuffle(indices);
+        // console.log("shflIndices " + shflIndices)
         sampleSize = Math.round(this._potentialPct * indices.length);
         for (var i = 0; i < sampleSize; i++) {
             mask[shflIndices[i]] = 1;
         };
+
+        console.log("mapPotential"); 
+        console.log(mask); 
         
         return mask
     };
@@ -1745,9 +1709,11 @@
         wrapAround = defaultFor(wrapAround, false);
         console.assert(dimensions.length > 0);
         
-        var columnCoords = this._indexToCoords(columnIndex,
-                                               this._columnDimensions,
-                                               this._columnDimCompCounts);
+        // var columnCoords = this._indexToCoords(columnIndex,
+        //                                        this._columnDimensions,
+        //                                        this._columnDimCompCounts);
+
+        var columnCoords = oneDtoNDCoord(columnIndex, dimensions); 
         //console.log("==============================");
         //console.log("Column Index");
         //console.log(columnIndex);
@@ -1756,19 +1722,21 @@
         //console.log("Radius in getNeighborsND ");
         //console.log(radius);
         var rangeND = [];
-        for (var i = 0; i < this._columnDimensions.length; i++) {
+        // for (var i = 0; i < this._columnDimensions.length; i++) {
+        for (var i = 0; i < dimensions.length; i++) {
             var curRange = [];
             if (wrapAround == true) {
                 console.log("Wrapping!");
                 for (var j = columnCoords[i] - radius; j < columnCoords[i] + radius + 1; j++){
-                    var val = j % this._columnDimensions[i];
+                    // var val = j % this._columnDimensions[i];
+                    var val = j % dimensions[i]
                     curRange.push[val];
                 };
             } else {
                 //console.log("No wrap!");
                 for (var j = columnCoords[i] - radius; j < columnCoords[i] + radius + 1; j++){
                     //console.log(j);
-                    if (j >= 0 && j < this._columnDimensions[i]) {
+                    if (j >= 0 && j < dimensions[i]) {
                         curRange.push(j);
                     };
                 };
@@ -1776,7 +1744,7 @@
             //console.log("Adding new range");
             //console.log(curRange);
             //console.log("------------");
-            rangeND.push(curRange);
+            rangeND.push(curRange); //should make sure values are unique. 
             
         };
         
@@ -1787,9 +1755,10 @@
         for (var i = 0; i < carProd.length; i++) {
             //console.log(carProd[i]);
             //console.log(this._columnDimCompCounts);
-            var ind = this._coordsToIndex(carProd[i],
-                                          this._columnDimensions,
-                                          this._columnDimCompCounts);
+            // var ind = this._coordsToIndex(carProd[i],
+            //                               this._columnDimensions,
+            //                               this._columnDimCompCounts);
+            var ind = nDto1DCoord(carProd[i], dimensions); 
             //console.log(ind);
             neighbors.push(ind);
         }
