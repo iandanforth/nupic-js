@@ -15,7 +15,7 @@
     // JAVASCRIPT MOD BUG FIX
     Number.prototype.mod = function(n) {
       return ((this%n)+n)%n;
-    }
+    };
 
     // http://www.codinghorror.com/blog/2007/12/the-danger-of-naivete.html
     function shuffle(arr) {
@@ -34,28 +34,28 @@
         var sum = 0;
         for(var i = 0; i < arr.length; i++){
             sum += arr[i];
-        };
+        }
         
         return sum / arr.length;
     }
 
     function arrayProduct(arr) {
         //Returns the product of the values in an array
-        var prod = 1
+        var prod = 1;
         for (var i = 0; i < arr.length; i += 1) {
             prod *= arr[i];
-        };
+        }
         return prod;
-    };
+    }
 
     function arrayCumProduct(arr) {
         // Returns the cumulative product of the values in an array
         var result = [];
         for (var i = 0; i < arr.length; i += 1) {
             result.push(arrayProduct(arr.slice(0, i + 1)));
-        };
+        }
         return result;
-    };
+    }
 
     function defaultFor(arg, val) {
         return typeof arg !== 'undefined' ? arg : val;
@@ -65,33 +65,31 @@
         // Returns a 1 dimensional array extracted from mat based on dimCount
         // Within a dimension all arrays must be of equal length.
         var oneDArray = [];
+        var i, j, k;
         if (dimCount == 1) {
             oneDArray = mat;
         } else if (dimCount == 2) {
-            var oneDArray = [];
-            for (var i = 0; i < mat.length; i++) {
-                for (var j = 0; j < mat[0].length; j++) {
+            for (i = 0; i < mat.length; i++) {
+                for (j = 0; j < mat[0].length; j++) {
                     oneDArray.push(mat[i][j]);
-                };
-            };
-            return oneDArray;
+                }
+            }
         } else if (dimCount == 3) {
-            var oneDArray = [];
-            for (var i = 0; i < mat.length; i++) {
-                for (var j = 0; j < mat[0].length; j++) {
-                    for (var k = 0; k < mat[0][0].length; k++) {
+            for (i = 0; i < mat.length; i++) {
+                for (j = 0; j < mat[0].length; j++) {
+                    for (k = 0; k < mat[0][0].length; k++) {
                         oneDArray.push(mat[i][j][k]);
-                    };
-                };
-            };
+                    }
+                }
+            }
         } else {
           throw "Input Error: Inputs must have 1, 2 or 3 dimensions.";
-        };
+        }
         
         return oneDArray;
     }
 
-    function Comparator( a, b ) {
+    function comparator( a, b ) {
         // Sorts an array by its second element. The first element must be
         // the original element index to provide stable sorting.
         
@@ -100,9 +98,9 @@
         }
         
         return a[1] - b[1];
-    };
+    }
 
-    function ComparatorReversed( a, b ) {
+    function comparatorReversed( a, b ) {
         // Reverse sorts an array by its second element. The first element must be
         // the original element index to provide stable sorting.
         if (a[1] == b[1]) {
@@ -110,7 +108,7 @@
         }
         
         return b[1] - a[1];
-    };
+    }
 
 
     function cartesianProductOf() {
@@ -128,7 +126,7 @@
 
     /*********************************/
 
-    var SpatialPooler = function( inputDimensions,
+    function SpatialPooler(inputDimensions,
                       columnDimensions,
                       potentialRadius,
                       potentialPct,
@@ -294,7 +292,9 @@
                               
         *******************************************************************/
         
-        var parent = this
+        var me = this;
+        var i;
+
         this._seed = defaultFor(seed, -1);
         Math.seedrandom(this._seed);
 
@@ -389,7 +389,7 @@
         // matrix, it is stored separately for efficiency purposes.
         
         this._connectedSynapses = [];
-        for (var i = 0; i < this._numColumns; i++) {
+        for (i = 0; i < this._numColumns; i++) {
           this._connectedSynapses.push([]);
         }
 
@@ -399,7 +399,7 @@
         // for efficiency purposes.
         
         this._connectedCounts = [];
-        for (var i = 0; i < this._numColumns; i++); {
+        for (i = 0; i < this._numColumns; i++) {
           this._connectedCounts.push(0.0);
         }
 
@@ -407,8 +407,8 @@
         // each column is connected to enough input bits to allow it to be 
         // activated.
         
-        for (var i = 0; i < this._numColumns; i++) {
-          var potential = parent._mapPotential( i, this._wrapPotentialPools );
+        for (i = 0; i < this._numColumns; i++) {
+          var potential = me._mapPotential( i, this._wrapPotentialPools );
           //console.log("Potential pool");
           //console.log(potential);
           this._potentialPools.push(potential);
@@ -416,20 +416,20 @@
           //console.log("Initial perms");
           //console.log(perm);
           this._updatePermanencesForColumn(perm, i, raisePerm = true);
-        };
+        }
 
         this._overlapDutyCycles = [];
         this._activeDutyCycles = [];
         this._minOverlapDutyCycles = [];
         this._minActiveDutyCycles = [];
         this._boostFactors = [];
-        for (var i = 0; i < this._numColumns; i++) {
+        for (i = 0; i < this._numColumns; i++) {
             this._overlapDutyCycles.push(0.0);
             this._activeDutyCycles.push(1e-5);
             this._minOverlapDutyCycles.push(1e-6);
             this._minActiveDutyCycles.push(1e-6);
             this._boostFactors.push(1.0);
-        };
+        }
 
         // The inhibition radius determines the size of a column's local 
         // neighborhood. A cortical column must overcome the overlap 
@@ -440,7 +440,7 @@
         this._updateInhibitionRadius();
         //console.log("In init. Inhibition radius:");
         //console.log(this._inhibitionRadius);
-    };
+    }
 
     SpatialPooler.prototype.compute = function(inputVector, learn, activeArray){
         /*
@@ -471,6 +471,9 @@
                         everywhere else.
         */
 
+        var i;
+        var oneDInputVector;
+
         if (typeof inputVector === 'undefined' || typeof activeArray === 'undefined') {
           return;
         }
@@ -478,7 +481,7 @@
         learn = typeof learn !== 'undefined' ? learn : true;
 
         // Convert to 1D array
-        var oneDInputVector = nDto1D(inputVector, this._inputDimensions.length);
+        oneDInputVector = nDto1D(inputVector, this._inputDimensions.length);
         //console.log("1D version of input: ");
         //console.log(oneDInputVector);
         
@@ -504,15 +507,15 @@
         // Apply boosting when learning is on
         var boostedOverlaps = [];
         if ( learn === true ) {
-            for (var i = 0; i < this.overlaps.length; i++) {
+            for (i = 0; i < this.overlaps.length; i++) {
                 boostedOverlaps.push(this.overlaps[i] * this._boostFactors[i]);
-            };
+            }
         } else {
           boostedOverlaps = this.overlaps;
         }
         
         // Store this as an accessible property
-        this.boostedOverlaps = boostedOverlaps
+        this.boostedOverlaps = boostedOverlaps;
         
         //if (this._numColumns == 10) {
         //    console.log("Boosted overlaps: ");
@@ -542,15 +545,15 @@
             
             this._updateBoostFactors();
             if ( this._isUpdateRound() ) {
-                this._updateInhibitionRadius()
+                this._updateInhibitionRadius();
                 // Note: This is a divergence. We do not bother with min duty cycles
                 // as they are used in bumpUpWeakColumns and the original non-local
                 // implementation of boosting, which is not used here.
                 //this._updateMinDutyCycles()
-            };
+            }
         } else {
             activeColumns = this._stripNeverLearned(activeColumns);
-        };
+        }
         
         //if (this._numColumns) {
         //    console.log("Active Columns after adaptSynapses");
@@ -558,12 +561,12 @@
         //}
 
         // Clear out the active array so we can refill it
-        for (var i = 0; i < activeArray.length; i++) {
+        for (i = 0; i < activeArray.length; i++) {
             activeArray[i] = 0;
-        };
+        }
         
         // Set new values
-        for (var i = 0; i < activeColumns.length; i++) {
+        for (i = 0; i < activeColumns.length; i++) {
             activeArray[activeColumns[i]] = this.boostedOverlaps[activeColumns[i]];
         }
         
@@ -588,11 +591,11 @@
 
         
     SpatialPooler.prototype._updateMinDutyCycles = function(){
-            console.log("Not implemented.")
+        console.log("Not implemented.")
     };
         
     SpatialPooler.prototype._updateMinDutyCyclesGlobal = function(){
-            console.log("Not implemented.")
+        console.log("Not implemented.")
     };
         
     SpatialPooler.prototype._updateDutyCycles = function(overlaps, activeColumns){
@@ -611,32 +614,34 @@
         activeColumns:  An array containing the indices of the active columns, 
                         the sprase set of columns which survived inhibition.
         */
-        
+
+        var i;
         // Create a couple of holding arrays
         var overlapArray = [];
         var activeArray = [];
-        for (var i = 0; i < this._numColumns; i++) {
+
+        for (i = 0; i < this._numColumns; i++) {
             overlapArray.push(0.0);
             activeArray.push(0.0);
-        };
+        }
         
         //console.log("Overlaps in update duty cycles");
         //console.log(overlaps);
         
         // If a column overlapped anything set its corresponding index to 1
-        for (var i = 0; i < overlaps.length; i++) {
+        for (i = 0; i < overlaps.length; i++) {
             if (overlaps[i] > 0) {
                 overlapArray[i] = 1;
-            };
-        };
+            }
+        }
         
         if (activeColumns.length > 0) {
             //console.log("Active columns in update duty cycles");
             //console.log(activeColumns);
-            for (var i = 0; i < activeColumns.length; i++) {
+            for (i = 0; i < activeColumns.length; i++) {
                 activeArray[activeColumns[i]] = 1;
-            };
-        };
+            }
+        }
         
         //console.log("Active array in update duty cycles");
         //console.log(activeArray);
@@ -679,12 +684,11 @@
         if (this._globalInhibition) {
             // Math.max can't handle arrays directly, use .apply() to explode
             this._inhibitionRadius = Math.max.apply(null, this._columnDimensions);
-            return;
         } else {
           var avgConnectedSpansForColumns = [];
           for (var i = 0; i < this._numColumns; i++) {
             avgConnectedSpansForColumns.push(this._avgConnectedSpanForColumnND(i));
-          };
+          }
           var avgConnectedSpan = arrayMean(avgConnectedSpansForColumns);
           //console.log("Average Connected Span");
           //console.log(avgConnectedSpan);
@@ -697,7 +701,7 @@
           var radius = (diameter - 1) / 2.0;
           //console.log("Radius: ")
           //console.log(radius);
-          var radius = Math.max(1.0, radius);
+          radius = Math.max(1.0, radius);
           //console.log(radius);
           this._inhibitionRadius = Math.round(radius);
           //console.log("INHIBITION RADIUS")
@@ -715,7 +719,8 @@
         */
         //TODO: extend to support different number of dimensions for inputs and 
         // columns
-        
+
+        var i;
         // Does our input or column space have more dimensions?
         var numDim = Math.max(this._columnDimensions.length,
                               this._inputDimensions.length);
@@ -724,29 +729,29 @@
         
         // Set up an array of ones
         var colDim = [];
-        for (var i = 0; i < numDim; i++) {
+        for (i = 0; i < numDim; i++) {
             colDim.push(1);
-        };
-        for (var i = 0; i < this._columnDimensions.length; i++) {
+        }
+        for (i = 0; i < this._columnDimensions.length; i++) {
             colDim[i] = this._columnDimensions[i];
         }
         
         // Set up another array of ones
         var inputDim = [];
-        for (var i = 0; i < numDim; i++) {
+        for (i = 0; i < numDim; i++) {
             inputDim.push(1);
-        };
+        }
         
-        for (var i = 0; i < this._inputDimensions.length; i++) {
+        for (i = 0; i < this._inputDimensions.length; i++) {
             inputDim[i] = this._inputDimensions[i];
-        };
+        }
 
         //console.log(numDim);
         //console.log(colDim);
         //console.log(inputDim);
         
         var columnsPerInput = [];
-        for (var i = 0; i < colDim.length; i++) {
+        for (i = 0; i < colDim.length; i++) {
             columnsPerInput.push(colDim[i] / inputDim[i]);
         }
         
@@ -783,10 +788,14 @@
         
         //console.log("Dimension components avgConnectedSpan")
         //console.log(this._inputDimCompCounts);
+        var i;
+        var minCoord, maxCoord;
         var connected = this._connectedSynapses[index];
+        var avgSpan;
+
         if (connected.length == 0) {
             return 0;
-        };
+        }
         //console.log("Connected synapses for this column: (avgConnectedSpan)");
         //console.log(connected)
 
@@ -794,17 +803,17 @@
         // coords in the input.
         maxCoord = [];
         minCoord = [];
-        for (var i = 0; i < this._inputDimensions.length; i++) {
+        for (i = 0; i < this._inputDimensions.length; i++) {
             maxCoord.push(-1);
             minCoord.push(Math.max.apply(null, this._inputDimensions));
-        };
+        }
         
         //console.log("MAX COORD and MIN COORD");
         //console.log(maxCoord);
         //console.log(minCoord);
         
         // Find the max and min coords of connected synapses
-        for (var i = 0; i < connected.length; i++) {
+        for (i = 0; i < connected.length; i++) {
             var ind = connected[i];
             var coords = this._indexToCoords(ind,
                                              this._inputDimensions,
@@ -815,7 +824,7 @@
             for (var j = 0; j < this._inputDimensions.length; j++) {
                 maxCoord[j] = Math.max(coords[j], maxCoord[j]);
                 minCoord[j] = Math.min(coords[j], minCoord[j]);
-            };
+            }
         }
 
         //console.log("MAX COORD and MIN COORD after iterations");
@@ -824,14 +833,14 @@
         
         // Get the average distance across dimensions
         var coordRange = 0;
-        for (var i = 0; i < this._inputDimensions.length; i++) {
+        for (i = 0; i < this._inputDimensions.length; i++) {
             coordRange += (maxCoord[i] - minCoord[i]) + 1;
-        };
+        }
         
         //console.log("COORD RANGE");
         //console.log(coordRange);
         
-        var avgSpan = coordRange / this._inputDimensions.length;
+        avgSpan = coordRange / this._inputDimensions.length;
         //console.log("Avg span");
         //console.log(avgSpan);
         return avgSpan;  
@@ -872,7 +881,7 @@
             var divStep = Math.floor(inputIndex / dimComp);
             var coord = Math.floor(inputIndex / dimComp) % dims[i];
             coords.push(coord);
-        };
+        }
         return coords;
     };
 
@@ -884,9 +893,10 @@
         this._inputDimensions.
         */
         var index = 0;
-        for (var i = 0; i < dims.length; i++) {
+        var i;
+        for (i = 0; i < dims.length; i++) {
             index += coords[i] * dimCompCounts[i];
-        };
+        }
         return index
     };
 
@@ -911,26 +921,27 @@
         //console.log(inputVector);
         
         var inputIndices = [];
-        for (var i = 0; i < inputVector.length; i++) {
+        var i, j;
+        for (i = 0; i < inputVector.length; i++) {
             if (inputVector[i] > 0) {
                 inputIndices.push(i);
-            };
-        };
+            }
+        }
         
         //console.log("Active input indices: ")
         //console.log(inputIndices);
         
         var permChanges = [];
-        for (var i = 0; i < this._numInputs; i++) {
+        for (i = 0; i < this._numInputs; i++) {
             permChanges.push(-1 * this._synPermInactiveDec);
-        };    
-        for (var i = 0; i < inputIndices.length; i++) {
+        }
+        for (i = 0; i < inputIndices.length; i++) {
             permChanges[inputIndices[i]] = this._synPermActiveInc;
-        };
+        }
 
         //console.log("Perm Changes");
         //console.log(permChanges);
-        for (var i = 0; i < activeColumns.length; i++) {
+        for (i = 0; i < activeColumns.length; i++) {
             var activeColIndex = activeColumns[i];
             //console.log("Active Col:");
             //console.log(activeColIndex);
@@ -941,20 +952,20 @@
             var activeColPotPool = this._potentialPools[activeColIndex];
             //console.log("Active Column Potential Pool");
             //console.log(activeColPotPool);
-            for (var j = 0; j < activeColPotPool.length; j++) {
+            for (j = 0; j < activeColPotPool.length; j++) {
                 if (activeColPotPool[j] > 0) {
                     maskPotential.push(j);
                 }
             }
-            for (var j = 0; j < maskPotential.length; j++) {
+            for (j = 0; j < maskPotential.length; j++) {
                 perm[maskPotential[j]] += permChanges[maskPotential[j]];
-            };
+            }
             //console.log("Perms after updating:");
             //console.log(perm)
             //console.log("Index")
             //console.log(i)
-            this._updatePermanencesForColumn(perm, activeColIndex, raisePerm = true)
-        };
+            this._updatePermanencesForColumn(perm, activeColIndex);
+        }
     };
         
     SpatialPooler.prototype._bumpUpWeakColumns = function(){
@@ -980,35 +991,36 @@
         mask:           the indices of the columns whose permanences need to be 
                         raised. (The potential pool)
         */
-        
+
+        var i;
+        var counter = 0;
+
         // TODO - Figure out if this should go within the while loop
         // Clip perms
-        for (var i = 0; i < perm.length; i++) {
+        for (i = 0; i < perm.length; i++) {
             // Raise numbers below min to min
             if (perm[i] < this._synPermMin) {
                 perm[i] = this._synPermMin;
             // Lower perms above max back down to max
             } else if (perm[i] > this._synPermMax) {
                 perm[i] = this._synPermMax;
-            };
-        };
+            }
+        }
         
-        var counter = 0;
         while (true) {
           
             if (counter > 40) {
-                throw "Possible infinite loop! Attempting to raise enough " +
-                "permanences to meet _stimulusThreshold failed.";
-                return
+                throw new Error("Possible infinite loop! Attempting to raise enough " +
+                "permanences to meet _stimulusThreshold failed.");
             }
           
             // See if we have enough connected synapses
             var conIndices = [];
-            for (var i = 0; i < perm.length; i++) {
+            for (i = 0; i < perm.length; i++) {
                 if (perm[i] >= this._synPermConnected) {
                     conIndices.push(i);
-                };
-            };
+                }
+            }
             //console.log(conIndices);
             var numConnected = conIndices.length;
             if (numConnected >= this._stimulusThreshold) {
@@ -1016,13 +1028,13 @@
                 return
             } else {
                 // If not then bump them all up a bit
-                for (var i = 0; i < mask.length; i++) {
+                for (i = 0; i < mask.length; i++) {
                   perm[mask[i]] += this._synPermBelowStimulusInc;
-                };
+                }
                 
                 counter++;
-            };
-        };
+            }
+        }
     };
       
     SpatialPooler.prototype._updatePermanencesForColumn = function(perm,
@@ -1054,40 +1066,42 @@
                         a connected state. Should be set to 'false' when a direct 
                         assignment is required.
         */
+
+        var i;
         raisePerm = defaultFor(raisePerm, true);
         // Get a list of indices where potential pool is not 0
         var maskPotential = [];
-        for (var i = 0; i < this._potentialPools[index].length; i++) {
+        for (i = 0; i < this._potentialPools[index].length; i++) {
             if (this._potentialPools[index][i] > 0) {
                 maskPotential.push(i);
-            };
-        };
+            }
+        }
         
         if (raisePerm == true) {
             if (index == 0) {
               //console.log("Mask Potential:");
               //console.log(maskPotential);
-            };
+            }
             this._raisePermanenceToThreshold(perm, maskPotential);
-        };
+        }
         
         // Remove perms below threshold and clip those above
-        for (var i = 0; i < perm.length; i++) {
+        for (i = 0; i < perm.length; i++) {
             // This will also raise numbers below 0 to 0.
             if (perm[i] < this._synPermTrimThreshold) {
                 perm[i] = 0;
             // Lower perms above max back down to max
             } else if (perm[i] > this._synPermMax) {
                 perm[i] = this._synPermMax;
-            };
-        };
+            }
+        }
           
         var newConnected = [];
-        for (var i = 0; i < perm.length; i++) {
+        for (i = 0; i < perm.length; i++) {
             if (perm[i] >= this._synPermConnected) {
                 newConnected.push(i);
-            };
-        };
+            }
+        }
         //console.log("Connected synapses for this column (in update): ");
         //console.log(newConnected);
         
@@ -1142,33 +1156,32 @@
         // Here we use logic similar to selecting a pct of the potential pool
         // rather than letting a random percentage averaging around connectedPct
         // be connected.
-        
+
+        var i;
         // Create an array where all perms are, by default, zero
         var permanences = [];
-        for (var i = 0; i < this._numInputs; i++) {
+        for (i = 0; i < this._numInputs; i++) {
             permanences.push(0.0);
         }
         
         // Find the indices of potential that are non-zero
         var potentialIndices = [];
-        for (var i = 0; i < this._numInputs; i++) {
-            if (potential[i] < 1.0) {
-                continue;
-            } else {
+        for (i = 0; i < this._numInputs; i++) {
+            if (potential[i] >= 1.0) {
                 potentialIndices.push(i);
-            };
-        };
+            }
+        }
         
         // Shuffle those indices and then set connectedPct of them to connected.
         potentialIndices = shuffle(potentialIndices);
         var sampleSize = Math.round(connectedPct * potentialIndices.length);
-        for (var i = 0; i < potentialIndices.length; i++) {
-                if (i < sampleSize) {
-                    permanences[potentialIndices[i]] = this._initPermConnected();
-                } else {
-                    permanences[potentialIndices[i]] = this._initPermNotConnected();
-                }
-        };
+        for (i = 0; i < potentialIndices.length; i++) {
+            if (i < sampleSize) {
+                permanences[potentialIndices[i]] = this._initPermConnected();
+            } else {
+                permanences[potentialIndices[i]] = this._initPermNotConnected();
+            }
+        }
             
         return permanences
     };
@@ -1207,10 +1220,16 @@
         wrapAround:     A boolean value indicating that boundaries should be 
                         region boundaries ignored.
         */
-        
+
+        var i;
         var indices = [];
-        var diameter = 2 * (this._potentialRadius) + 1
-        
+        var diameter = 2 * (this._potentialRadius) + 1;
+        var xShift, yShift;
+        var coordInColSpace, colXNum, colYNum, coords;
+        var minCoords = [];
+        var shflIndices, sampleSize;
+        var mask = [];
+
         // If we are doing 2D topology
         if (this._inputDimensions.length == 2) {
             
@@ -1222,15 +1241,15 @@
                 //console.log(this._columnDimensions);
                 
                 // Calculate how to ~ evenly distribute our columns in input space
-                var xShift = (this._inputDimensions[0] - this._columnDimensions[0]) / (1 + this._columnDimensions[0]);
+                xShift = (this._inputDimensions[0] - this._columnDimensions[0]) / (1 + this._columnDimensions[0]);
                 //console.log("Avg xShift: " + xShift);
-                var yShift = (this._inputDimensions[1] - this._columnDimensions[1]) / (1 + this._columnDimensions[1]);
+                yShift = (this._inputDimensions[1] - this._columnDimensions[1]) / (1 + this._columnDimensions[1]);
                 //console.log("Avg yShift: " + yShift);
                 
                 // Calculate our column coordinates in column space
-                var coordInColSpace = this._indexToCoords(index,
-                                                        this._columnDimensions,
-                                                        this._columnDimCompCounts)
+                coordInColSpace = this._indexToCoords(index,
+                                                    this._columnDimensions,
+                                                    this._columnDimCompCounts);
                 
                 //console.log("Index:");
                 //console.log(index);
@@ -1238,10 +1257,10 @@
                 //console.log(coordInColSpace);
                 
                 // Apply the shift in column space
-                var colXNum = coordInColSpace[0] + 1;
-                var xShift = Math.floor(colXNum * xShift);
-                var colYNum = coordInColSpace[1] + 1;
-                var yShift = Math.floor(colYNum * yShift);      
+                colXNum = coordInColSpace[0] + 1;
+                xShift = Math.floor(colXNum * xShift);
+                colYNum = coordInColSpace[1] + 1;
+                yShift = Math.floor(colYNum * yShift);
                 coordInColSpace[0] += xShift;
                 coordInColSpace[1] += yShift;
                 
@@ -1249,25 +1268,24 @@
                 index = this._coordsToIndex(coordInColSpace,
                                             this._inputDimensions,
                                             this._inputDimCompCounts);
-            };
+            }
             
-            var coords = this._indexToCoords(index,
-                                             this._inputDimensions,
-                                             this._inputDimCompCounts)
+            coords = this._indexToCoords(index,
+                                         this._inputDimensions,
+                                         this._inputDimCompCounts);
             
             // Create a square area to make it easy
             // Use pythagorean theorem to find the area of a square with diagonal of
             // len diameter.
-            var arrayLen = Math.pow(diameter, 2)
+            var arrayLen = Math.pow(diameter, 2);
             
             // Find the top right corner of the area
-            var minCoords = [];
-            for (var i = 0; i < this._inputDimensions.length; i++) {
+            for (i = 0; i < this._inputDimensions.length; i++) {
                 minCoords.push(coords[i] - this._potentialRadius);
-            };
+            }
             
             // Iterate through all the indices in the area, wrapping if neccessary
-            for (var i = 0; i < diameter; i++) {
+            for (i = 0; i < diameter; i++) {
                 for (var j = 0; j < diameter; j++) {
                     x = (minCoords[0] + j);
                     y = (minCoords[1] + i);
@@ -1286,8 +1304,8 @@
                     indices.push(this._coordsToIndex(areaCoords,
                                                      this._inputDimensions,
                                                      this._inputDimCompCounts));
-                };
-            };
+                }
+            }
             
         } else {
             
@@ -1306,39 +1324,39 @@
             // Fill it with the first indices i.e. 0, 1, 2, 3 etc.
             //console.log("Diameter")
             //console.log(diameter);
-            for (var i = 0; i < diameter; i++) {
+            for (i = 0; i < diameter; i++) {
                 indices.push(i);
-            };
+            }
             //console.log("Indices");
             //console.log(indices);
             // Shift over so index 0 of that array is the value of the column index
             // e.g. Column index 1000 - 1000, 1001, 1002 etc.
-            for (var i = 0; i < diameter; i++) {
+            for (i = 0; i < diameter; i++) {
                 indices[i] += index;
-            };
+            }
             
             //console.log("Moved indices");
             //console.log(indices);
             // Shift back so the column index is centered
-            for (var i = 0; i < diameter; i++) {
+            for (i = 0; i < diameter; i++) {
                 indices[i] -= this._potentialRadius;
-            };
+            }
             // We may want column receptive fields to wrap
             if (wrapAround === true) {
-                for (var i = 0; i < diameter; i++) {
+                for (i = 0; i < diameter; i++) {
                   indices[i] = indices[i].mod(this._numInputs);
-                };
+                }
             } else {
                 // Otherwise remove indices that are outside the range of the input
                 var cleanedIndices = [];
-                for (var i = 0; i < diameter; i++) {
+                for (i = 0; i < diameter; i++) {
                   if (indices[i] >= 0 && indices[i] < this._numInputs) {
                     cleanedIndices.push(indices[i]);
                   }
-                };
+                }
                 indices = cleanedIndices;
-            };
-        };
+            }
+        }
         // Remove duplicate indices
         indices = new Set(indices).array();
         //console.log(indices);
@@ -1346,16 +1364,15 @@
         // Select a subset of the receptive field to serve as the potential pool
         // Because we are seeding the random number generator these selections
         // will be the same across runs.
-        var mask = [];
-        for (var i = 0; i < this._numInputs; i++) {
+        for (i = 0; i < this._numInputs; i++) {
             mask.push(0);
-        };
+        }
         // Shuffle our indices and then take the first n
         shflIndices = shuffle(indices);
         sampleSize = Math.round(this._potentialPct * indices.length);
-        for (var i = 0; i < sampleSize; i++) {
+        for (i = 0; i < sampleSize; i++) {
             mask[shflIndices[i]] = 1;
-        };
+        }
         
         return mask
     };
@@ -1382,11 +1399,11 @@
         period:         The period of the duty cycle      
         */
         console.assert(period >= 1);
-        
+        var i;
         var newDutyCycles = [];
-        for (var i = 0; i < dutyCycles.length; i++) {
+        for (i = 0; i < dutyCycles.length; i++) {
             newDutyCycles[i] = (dutyCycles[i] * (period - 1.0) + newInput[i]) / period;
-        };
+        }
         
         return newDutyCycles
     };
@@ -1428,17 +1445,18 @@
         */
         
         var minActiveDutyCycle = 0.05;
+        var boost, m, x, b;
         for (var i = 0; i < this._numColumns; i++) {
             // Don't boost if we're above the min duty cycle;
             if (this._activeDutyCycles[i] > minActiveDutyCycle) {
-                var boost = 1;
+                boost = 1;
             } else {
                 // Slope
-                var m = (1 - this._maxBoost) / minActiveDutyCycle 
-                var x = this._activeDutyCycles[i]
+                m = (1 - this._maxBoost) / minActiveDutyCycle;
+                x = this._activeDutyCycles[i];
                 // Y Intercept
-                var b = this._maxBoost
-                var boost =  m * x + b;
+                b = this._maxBoost;
+                boost =  m * x + b;
             }
             this._boostFactors[i] = boost;
         }
@@ -1447,7 +1465,7 @@
         //console.log(this._boostFactors);
     };
         
-    SpatialPooler.prototype._updateBookeepingVars = function(learn){
+    SpatialPooler.prototype._updateBookeepingVars = function(learn) {
         /*
         Updates counter instance variables each round.
 
@@ -1460,12 +1478,12 @@
                         for indicating separate training vs. testing sets. 
         */
         this._iterationNum++;
-        if ( learn === true ){
+        if ( learn === true ) {
           this._iterationLearnNum++;
-        };
+        }
     };
         
-    SpatialPooler.prototype._calculateOverlap = function(inputVector){
+    SpatialPooler.prototype._calculateOverlap = function(inputVector) {
         /*
         This function determines each column's overlap with the current input 
         vector. The overlap of a column is the number of synapses for that column
@@ -1478,8 +1496,10 @@
         ----------------------------
         inputVector:    an array that comprises the input to the spatial pooler.
         */
+        var i, j;
         var overlaps = [];
-        for (var i = 0; i < this._numColumns; i++) {
+        var inVal;
+        for (i = 0; i < this._numColumns; i++) {
             // Look up the connected synapses for each column. These values
             // correspond to indices in the input.
             //if (this._numColumns == 5 && this._iterationLearnNum > 1000) {
@@ -1489,31 +1509,31 @@
             //    console.log(this._connectedSynapses[i]);
             //}
             var overlap = 0;
-            for (var j = 0; j < this._connectedSynapses[i].length; j++){
+            for (j = 0; j < this._connectedSynapses[i].length; j++){
                 //console.log("Is input bit " +
                 //            this._connectedSynapses[i][j] + " on?");
                 // Add up the input values to get the overlap
                 // NOTE: This is a divergence from the cpp/python code as it
                 // supports scalar inputs between 0.0 and 1.0
-                var inVal = inputVector[this._connectedSynapses[i][j]];
+                inVal = inputVector[this._connectedSynapses[i][j]];
                 //if (inVal < 0 || inVal > 1) {
                 //    throw "Input Error: Values in the input vector must be " +
                 //    "between 0.0 and 1.0";
                 //};
                 overlap += inVal;
-            };
+            }
             overlaps.push(overlap);
-        };
+        }
         
         //if (this._numColumns == 5) {
         //    console.log("Overlaps before thresholding:")
         //    console.log(overlaps);
         //}
         // Zero out columns that didn't meet _stimulusThreshold
-        for (var i = 0; i < overlaps.length; i++) {
+        for (i = 0; i < overlaps.length; i++) {
             if (overlaps[i] < this._stimulusThreshold) {
                 overlaps[i] = 0;
-            };
+            }
         }
         
         //if (this._numColumns == 5 && this._iterationLearnNum > 1000) {
@@ -1525,10 +1545,11 @@
     };
         
     SpatialPooler.prototype._calculateOverlapPct = function(overlaps){
-        overlapPercents = [];
-        for (var i = 0; i < overlaps.length; i++) {
+        var i;
+        var overlapPercents = [];
+        for (i = 0; i < overlaps.length; i++) {
             overlapPercents.push(overlaps[i] / this._connectedCounts[i]);
-        };
+        }
         return overlapPercents;
     };
       
@@ -1548,37 +1569,38 @@
                         extra noise to overlap scores prior to determining winners.
                         NOTE: This is a divergence from the cpp/py implementation.
         */
-        
-        // Determine how many columns should be selected in the inhibition phase. 
-        // This can be specified by either setting the 'numActiveColumnsPerInhArea' 
+
+        // Determine how many columns should be selected in the inhibition phase.
+        // This can be specified by either setting the 'numActiveColumnsPerInhArea'
         // parameter of the 'localAreaDensity' parameter when initializing the class
-        
+
         //console.log("Overlaps (in inhibitColumns)");
         //console.log(overlaps);
-        
+        var i;
+        var density, inhibitionArea;
         var overlapsCopy = overlaps.slice();
         if (this._localAreaDensity > 0) {
-            var density = this._localAreaDensity;
+            density = this._localAreaDensity;
         } else {
             //console.log(this._inhibitionRadius);
-            var inhibitionArea = Math.pow( (2 * this._inhibitionRadius + 1), 
+            inhibitionArea = Math.pow( (2 * this._inhibitionRadius + 1),
                                           this._columnDimensions.length);
             //console.log(inhibitionArea);
             inhibitionArea = Math.min(this._numColumns, inhibitionArea);
             //console.log(inhibitionArea);
             //console.log(this._numActiveColumnsPerInhArea);
-            var density = this._numActiveColumnsPerInhArea / inhibitionArea;
+            density = this._numActiveColumnsPerInhArea / inhibitionArea;
             //console.log(density);
             density = Math.min(density, 0.5);
             //console.log(density);
-        };
+        }
 
         // Add a little bit of random noise to the scores to help break ties.
         if (addNoise === true) {
-            for (var i = 0; i < overlapsCopy.length; i++) {
+            for (i = 0; i < overlapsCopy.length; i++) {
                 overlapsCopy[i] += Math.random() * 0.1;
-            };
-        };
+            }
+        }
         
         if (this._globalInhibition ||
             this._inhibitionRadius > Math.max.apply(null,
@@ -1586,7 +1608,7 @@
             return this._inhibitColumnsGlobal(overlapsCopy, density);
         } else {
             return this._inhibitColumnsLocal(overlapsCopy, density);
-        };
+        }
     };
         
     SpatialPooler.prototype._inhibitColumnsGlobal = function(overlaps, density){
@@ -1605,11 +1627,13 @@
         */
         
         // Calculate num active total
+        var i, j;
+        var wSorted;
         var numActive = Math.round(density * this._numColumns);
         var activeColumns = [];
-        for (var i = 0; i < this._numColumns; i++) {
+        for (i = 0; i < this._numColumns; i++) {
             activeColumns.push(0.0);
-        };
+        }
         
         //console.log("Overlaps:");
         //console.log(overlaps);
@@ -1617,13 +1641,13 @@
         //console.log(density); 
         // We want to retain the index for later use
         var winners = [];
-        for (var j = 0; j < overlaps.length; j++) {
+        for (j = 0; j < overlaps.length; j++) {
           winners.push([j, overlaps[j]]);
-        };
+        }
         //console.log("Winners:")
         //console.log(winners);
         
-        wSorted = winners.slice().sort(ComparatorReversed);
+        wSorted = winners.slice().sort(comparatorReversed);
         //console.log("Winners sorted:")
         //console.log(wSorted);
 
@@ -1632,7 +1656,7 @@
         //console.log("Final Winners");
         //console.log(finalWinners);
         var winningIndices = [];
-        for (var i = 0; i < finalWinners.length; i++) {
+        for (i = 0; i < finalWinners.length; i++) {
             winningIndices.push(finalWinners[i][0]);
         }
         return winningIndices
@@ -1660,23 +1684,24 @@
         
         //console.log("Overlaps (in inhibitColumnsLocal)");
         //console.log(overlaps);
-        
+
+        var i, j;
         // Create a holding array for the active column indices
         var winningColumns = [];
         
         // Calculate a small value to add to the winning column overlap scores
         var addToWinners = Math.max.apply(null, overlaps) / 1000.0;
         // Loop over each column
-        for (var i = 0; i < this._numColumns; i++) {
+        for (i = 0; i < this._numColumns; i++) {
             // Get a list of columns this column can inhibit
             var maskNeighbors = this._getNeighborsND( i,
                                                      this._columnDimensions,
                                                      this._inhibitionRadius);
             // Get the overlap scores for those columns
             var overlapSlice = [];
-            for (var j = 0; j < maskNeighbors.length; j++) {
+            for (j = 0; j < maskNeighbors.length; j++) {
                 overlapSlice.push(overlaps[maskNeighbors[j]]);
-            };
+            }
             //console.log("Overlap slice: ");
             //console.log(overlapSlice);
             // Decide how many should be active in this area
@@ -1687,19 +1712,19 @@
             //console.log("Num active in this area should be: ");
             //console.log(numActive);
             var numBigger = 0;
-            for (var j = 0; j < overlapSlice.length; j++) {
+            for (j = 0; j < overlapSlice.length; j++) {
                 //console.log("Comparisons: ");
                 //console.log("Slice: " + overlapSlice[j] + " Col Overlap: " + overlaps[i]);
                 if (overlapSlice[j] >= overlaps[i]) {
                     numBigger++;
-                };
-            };
+                }
+            }
             if (numBigger < numActive) {
                 //console.log("WINNER!");
-                winningColumns.push(i);;
+                winningColumns.push(i);
             }
             
-        };
+        }
         
         return winningColumns
     };
@@ -1741,7 +1766,11 @@
                         considered adjacent if wrapAround is set to true:
                         [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
         */
-        
+
+        var i, j;
+        var curRange;
+        var val;
+
         wrapAround = defaultFor(wrapAround, false);
         console.assert(dimensions.length > 0);
         
@@ -1756,35 +1785,35 @@
         //console.log("Radius in getNeighborsND ");
         //console.log(radius);
         var rangeND = [];
-        for (var i = 0; i < this._columnDimensions.length; i++) {
-            var curRange = [];
+        for (i = 0; i < this._columnDimensions.length; i++) {
+            curRange = [];
             if (wrapAround == true) {
                 console.log("Wrapping!");
-                for (var j = columnCoords[i] - radius; j < columnCoords[i] + radius + 1; j++){
-                    var val = j % this._columnDimensions[i];
-                    curRange.push[val];
-                };
+                for (j = columnCoords[i] - radius; j < columnCoords[i] + radius + 1; j++){
+                    val = j % this._columnDimensions[i];
+                    curRange.push(val);
+                }
             } else {
                 //console.log("No wrap!");
-                for (var j = columnCoords[i] - radius; j < columnCoords[i] + radius + 1; j++){
+                for (j = columnCoords[i] - radius; j < columnCoords[i] + radius + 1; j++){
                     //console.log(j);
                     if (j >= 0 && j < this._columnDimensions[i]) {
                         curRange.push(j);
-                    };
-                };
-            };
+                    }
+                }
+            }
             //console.log("Adding new range");
             //console.log(curRange);
             //console.log("------------");
             rangeND.push(curRange);
             
-        };
+        }
         
         var carProd = cartesianProductOf.apply(null, rangeND);
         
         //console.log(carProd);
         var neighbors = [];
-        for (var i = 0; i < carProd.length; i++) {
+        for (i = 0; i < carProd.length; i++) {
             //console.log(carProd[i]);
             //console.log(this._columnDimCompCounts);
             var ind = this._coordsToIndex(carProd[i],
