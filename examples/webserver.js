@@ -33,7 +33,7 @@ http.createServer( function(req, res) {
 	if (isValidExt) {
 		
 		localPath += filename;
-		path.exists(localPath, function(exists) {
+		fs.exists(localPath, function(exists) {
 			if(exists) {
 				console.log("Serving file: " + localPath);
 				getFile(localPath, res, isValidExt);
